@@ -476,6 +476,19 @@
       </div>
     </form>
   </div>
+  <aside class="job-live-panel" aria-labelledby="jobLivePanelTitle">
+    <div class="job-live-panel-head">
+      <span class="availability-dot" aria-hidden="true"></span>
+      <div>
+        <strong id="jobLivePanelTitle">Kan hjälpa idag</strong>
+        <span>Utförare med aktiv status just nu</span>
+      </div>
+    </div>
+    <div class="job-live-list" id="jobModalPerformers">
+      <div class="account-meta">Hämtar tillgängliga utförare…</div>
+    </div>
+    <p class="availability-disclaimer">Tillgänglighet är en indikation. Utföraren bekräftar efter att jobbet publicerats.</p>
+  </aside>
 </div>
 
 <div class="modal" id="callbackModal">
@@ -528,7 +541,13 @@
 <div class="modal" id="accountModal">
   <div class="dialog account-dialog">
     <div class="dialog-top">
-      <h3 id="accountTitle">Logga in eller skapa konto</h3>
+      <div class="account-title-row">
+        <h3 id="accountTitle">Logga in eller skapa konto</h3>
+        <button class="notification-button account-notification-button hidden" id="accountNotificationButton" type="button" onclick="toggleNotificationCenter()" aria-label="Öppna notiser" aria-expanded="false">
+          <span aria-hidden="true">🔔</span>
+          <span class="notification-badge hidden" id="accountNotificationBadge">0</span>
+        </button>
+      </div>
       <div class="dialog-corner-actions">
         <button class="btn btn-danger btn-small account-logout hidden" id="accountLogoutBtn" type="button" onclick="signOut()">Logga ut</button>
         <button class="close" onclick="closeAccountModal()" aria-label="Stäng">×</button>

@@ -162,7 +162,7 @@
 </div>
 
 <div class="modal" id="accountModal">
-  <div class="dialog">
+  <div class="dialog account-dialog">
     <div class="dialog-top">
       <h3 id="accountTitle">Logga in eller skapa konto</h3>
       <button class="close" onclick="closeAccountModal()" aria-label="Stäng">×</button>
@@ -248,19 +248,95 @@
 
     <div id="accountStep" class="hidden">
       <div class="account-head">
-        <div>
-          <h3 id="accountName">Mitt konto</h3>
-          <div class="account-meta" id="accountEmail"></div>
+        <div class="profile-identity">
+          <div class="account-avatar" id="accountAvatar" aria-hidden="true">G</div>
+          <div>
+            <h3 id="accountName">Mitt konto</h3>
+            <div class="account-meta" id="accountEmail"></div>
+          </div>
         </div>
         <span class="status-pill" id="accountRole">Beställare</span>
       </div>
-      <div class="account-actions">
-        <a class="btn btn-primary" href="index.html?newJob=1">Lägg upp jobb</a>
-        <a class="btn btn-light hidden" id="findJobsBtn" href="jobb.html">Hitta jobb</a>
-        <button class="btn btn-light" id="enablePerformerBtn" onclick="showPerformerStep()">Aktivera utförarprofil</button>
-        <button class="btn btn-light" onclick="signOut()">Logga ut</button>
+
+      <div class="profile-prompt" id="profilePrompt">
+        <div>
+          <strong>Förbättra dina chanser</strong>
+          <span id="profilePromptText">Lägg till en bild och en kort presentation.</span>
+        </div>
+        <button class="btn btn-light btn-small" type="button" onclick="showAccountTab('profile')">Förbättra profil</button>
       </div>
-      <div class="job-list" id="myJobs"></div>
+
+      <div class="account-tabs" role="tablist" aria-label="Kontosidor">
+        <button class="account-tab active" id="accountTabJobs" type="button" role="tab" aria-selected="true" aria-controls="accountJobsPanel" onclick="showAccountTab('jobs')">Mina jobb</button>
+        <button class="account-tab" id="accountTabProfile" type="button" role="tab" aria-selected="false" aria-controls="accountProfilePanel" onclick="showAccountTab('profile')">Min profil</button>
+        <button class="account-tab hidden" id="accountTabEarnings" type="button" role="tab" aria-selected="false" aria-controls="accountEarningsPanel" onclick="showAccountTab('earnings')">Intjänat</button>
+      </div>
+
+      <section class="account-panel" id="accountJobsPanel" role="tabpanel" aria-labelledby="accountTabJobs">
+        <div class="account-actions">
+          <a class="btn btn-primary" href="index.html?newJob=1">Lägg upp jobb</a>
+          <a class="btn btn-light hidden" id="findJobsBtn" href="jobb.html">Hitta jobb</a>
+          <button class="btn btn-light" id="enablePerformerBtn" onclick="showPerformerStep()">Aktivera utförarprofil</button>
+          <button class="btn btn-light" onclick="signOut()">Logga ut</button>
+        </div>
+        <div class="job-list" id="myJobs"></div>
+      </section>
+
+      <section class="account-panel hidden" id="accountProfilePanel" role="tabpanel" aria-labelledby="accountTabProfile">
+        <div class="profile-editor">
+          <div class="avatar-editor">
+            <div class="account-avatar account-avatar-large" id="profileAvatarPreview" aria-hidden="true">G</div>
+            <div>
+              <label class="btn btn-light btn-small" for="profileAvatarInput">Välj profilbild</label>
+              <input class="visually-hidden" id="profileAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" />
+              <div class="account-meta">Frivilligt · JPG, PNG eller WebP · max 5 MB</div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="editProfileName">Namn</label>
+            <input id="editProfileName" maxlength="100" autocomplete="name" />
+          </div>
+          <div class="field">
+            <label for="editProfileBio">Kort beskrivning <span class="optional-label">Frivilligt</span></label>
+            <textarea id="editProfileBio" rows="4" maxlength="600" placeholder="Berätta kort vem du är, vad du är bra på och hur du brukar hjälpa till"></textarea>
+          </div>
+          <div id="performerProfileFields">
+            <div class="field">
+              <label for="editProfileArea">Område</label>
+              <input id="editProfileArea" maxlength="120" placeholder="Exempel: Upplands Väsby med omnejd" />
+            </div>
+            <div class="field">
+              <label for="editProfileSkills">Vad kan du hjälpa till med?</label>
+              <input id="editProfileSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" />
+            </div>
+          </div>
+          <button class="btn btn-primary" id="saveOptionalProfileBtn" type="button" onclick="saveOptionalProfile()">Spara profil</button>
+          <div class="profile-progress"><span id="profileProgressBar"></span></div>
+          <div class="account-meta" id="profileProgressText"></div>
+        </div>
+      </section>
+
+      <section class="account-panel hidden" id="accountEarningsPanel" role="tabpanel" aria-labelledby="accountTabEarnings">
+        <div class="earnings-grid">
+          <div class="stat-card"><span>Totalt intjänat</span><strong id="totalEarnings">0 kr</strong></div>
+          <div class="stat-card"><span>Utförda jobb</span><strong id="completedJobsCount">0</strong></div>
+          <div class="stat-card"><span>Ditt betyg</span><strong id="averageRating">–</strong></div>
+        </div>
+        <div class="goal-card">
+          <div>
+            <h4>Mitt sparmål</h4>
+            <p>Sätt ett frivilligt mål och följ hur långt dina utförda jobb har tagit dig.</p>
+          </div>
+          <div class="goal-controls">
+            <input id="savingsGoalInput" inputmode="numeric" placeholder="Exempel: 10 000 kr" />
+            <button class="btn btn-primary btn-small" id="saveGoalBtn" type="button" onclick="saveSavingsGoal()">Spara mål</button>
+          </div>
+          <div class="goal-progress"><span id="goalProgressBar"></span></div>
+          <div class="account-meta" id="goalProgressText">Inget mål satt ännu.</div>
+        </div>
+        <div class="earnings-list" id="earningsList"></div>
+      </section>
+
       <div class="notice hidden" id="accountNotice" role="status"></div>
     </div>
   </div>

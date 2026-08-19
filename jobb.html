@@ -165,7 +165,10 @@
   <div class="dialog account-dialog">
     <div class="dialog-top">
       <h3 id="accountTitle">Logga in eller skapa konto</h3>
-      <button class="close" onclick="closeAccountModal()" aria-label="Stäng">×</button>
+      <div class="dialog-corner-actions">
+        <button class="btn btn-danger btn-small account-logout hidden" id="accountLogoutBtn" type="button" onclick="signOut()">Logga ut</button>
+        <button class="close" onclick="closeAccountModal()" aria-label="Stäng">×</button>
+      </div>
     </div>
 
     <div id="authEmailStep" class="auth-stack">
@@ -277,7 +280,6 @@
           <a class="btn btn-primary" href="index.html?newJob=1">Lägg upp jobb</a>
           <a class="btn btn-light hidden" id="findJobsBtn" href="jobb.html">Hitta jobb</a>
           <button class="btn btn-light" id="enablePerformerBtn" onclick="showPerformerStep()">Aktivera utförarprofil</button>
-          <button class="btn btn-light" onclick="signOut()">Logga ut</button>
         </div>
         <div class="job-list" id="myJobs"></div>
       </section>
@@ -309,6 +311,20 @@
               <label for="editProfileSkills">Vad kan du hjälpa till med?</label>
               <input id="editProfileSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" />
             </div>
+            <div class="availability-card hidden" id="availabilityCard">
+              <div class="availability-card-copy">
+                <span class="availability-dot" aria-hidden="true"></span>
+                <div>
+                  <strong id="availabilityStatusText">Ingen extra synlighet aktiv</strong>
+                  <span id="availabilityExpiry">Få extra synlighet när du kan hjälpa till med kort varsel.</span>
+                </div>
+              </div>
+              <div class="availability-actions">
+                <button class="btn btn-primary btn-small" id="availabilityNowBtn" type="button" onclick="saveAvailabilityStatus('now')">Jag kan hjälpa nu</button>
+                <button class="btn btn-light btn-small" id="availabilityTodayBtn" type="button" onclick="saveAvailabilityStatus('today')">Jag kan hjälpa idag</button>
+                <button class="link-button hidden" id="clearAvailabilityBtn" type="button" onclick="saveAvailabilityStatus('unavailable')">Ta bort min status</button>
+              </div>
+            </div>
           </div>
           <button class="btn btn-primary" id="saveOptionalProfileBtn" type="button" onclick="saveOptionalProfile()">Spara profil</button>
           <div class="profile-progress"><span id="profileProgressBar"></span></div>
@@ -339,6 +355,25 @@
 
       <div class="notice hidden" id="accountNotice" role="status"></div>
     </div>
+  </div>
+</div>
+
+<div class="modal chat-modal" id="jobChatModal">
+  <div class="dialog chat-dialog">
+    <div class="dialog-top">
+      <div>
+        <h3>Jobbchatt</h3>
+        <p class="auth-intro" id="jobChatTitle"></p>
+      </div>
+      <button class="close" type="button" onclick="closeJobChat()" aria-label="Stäng">×</button>
+    </div>
+    <div class="chat-messages" id="jobChatMessages" aria-live="polite"></div>
+    <form class="chat-form" id="jobChatForm" onsubmit="sendJobMessage(event)">
+      <label class="visually-hidden" for="jobChatInput">Skriv ett meddelande</label>
+      <textarea id="jobChatInput" rows="2" maxlength="2000" placeholder="Skriv till den andra personen…" required></textarea>
+      <button class="btn btn-primary" id="jobChatSendBtn" type="submit">Skicka</button>
+    </form>
+    <div class="notice hidden" id="jobChatNotice" role="status"></div>
   </div>
 </div>
 

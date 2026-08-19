@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grannpojkarna – Hjälpen finns runt hörnet</title>
+  <meta name="description" content="Grannpojkarna matchar dig med privatpersoner och lokala företag som kan hjälpa till med småjobb och större projekt." />
+  <style>
+    :root{
+      --ink:#14261d;
+      --muted:#607067;
+      --brand:#2f6b4f;
+      --brand-dark:#1f4a38;
+      --brand-soft:#e8f2ec;
+      --cream:#f7f4ee;
+      --line:#dde6e0;
+      --white:#ffffff;
+      --shadow:0 18px 50px rgba(24, 52, 39, .10);
+      --radius:24px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color:var(--ink);
+      background:var(--white);
+      line-height:1.55;
+    }
+    a{text-decoration:none;color:inherit}
+    button,input,textarea,select{font:inherit}
+    .wrap{max-width:1180px;margin:auto;padding:0 24px}
+    header{
+      position:sticky;top:0;z-index:20;
+      background:rgba(255,255,255,.92);
+      backdrop-filter:blur(14px);
+      border-bottom:1px solid rgba(221,230,224,.85);
+    }
+    nav{height:74px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+    .logo{display:flex;align-items:center;gap:12px;font-weight:900;font-size:1.25rem}
+    .logo-mark{
+      width:42px;height:42px;border-radius:14px;background:var(--brand);
+      display:grid;place-items:center;color:white;font-size:1.25rem;box-shadow:var(--shadow)
+    }
+    .navlinks{display:flex;gap:28px;color:var(--muted);font-weight:600}
+    .btn{
+      border:0;border-radius:14px;padding:14px 20px;font-weight:800;cursor:pointer;
+      transition:.2s ease;display:inline-flex;align-items:center;justify-content:center;gap:8px
+    }
+    .btn-primary{background:var(--brand);color:white}
+    .btn-primary:hover{background:var(--brand-dark);transform:translateY(-1px)}
+    .btn-light{background:white;border:1px solid var(--line);color:var(--ink)}
+    .btn-light:hover{background:#f8faf8}
+    .hero{
+      background:
+        radial-gradient(circle at 80% 20%, rgba(47,107,79,.14), transparent 32%),
+        linear-gradient(135deg, var(--cream), #fff 70%);
+      padding:82px 0 74px;
+      overflow:hidden;
+    }
+    .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:64px;align-items:center}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;background:var(--brand-soft);color:var(--brand-dark);font-weight:800;padding:8px 12px;border-radius:999px;font-size:.92rem}
+    h1{font-size:clamp(3rem,7vw,5.7rem);line-height:.96;letter-spacing:-.055em;margin:20px 0}
+    .lead{font-size:1.2rem;color:var(--muted);max-width:650px}
+    .hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin:30px 0 18px}
+    .trust{display:flex;gap:22px;flex-wrap:wrap;color:var(--muted);font-weight:700;font-size:.95rem}
+    .phone{
+      max-width:500px;margin-left:auto;background:#101713;border-radius:34px;padding:14px;
+      box-shadow:0 35px 80px rgba(20,38,29,.22);transform:rotate(1.5deg)
+    }
+    .screen{background:#f8faf8;border-radius:24px;padding:24px}
+    .screen-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    .screen-title{font-size:1.4rem;font-weight:900}
+    .job{
+      background:white;border:1px solid var(--line);border-radius:20px;padding:18px;margin-top:14px;
+      box-shadow:0 8px 26px rgba(30,70,50,.07)
+    }
+    .job-head{display:flex;justify-content:space-between;gap:16px}
+    .job h4{margin:0 0 4px;font-size:1.08rem}
+    .price{font-weight:900;color:var(--brand-dark)}
+    .meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:.9rem;margin-top:10px}
+    section{padding:84px 0}
+    .section-head{max-width:720px;margin-bottom:34px}
+    .section-head h2{font-size:clamp(2.1rem,4.5vw,3.4rem);letter-spacing:-.04em;line-height:1.04;margin:0 0 14px}
+    .section-head p{color:var(--muted);font-size:1.1rem;margin:0}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .card{border:1px solid var(--line);border-radius:var(--radius);padding:26px;background:white}
+    .card.accent{background:var(--brand);color:white;border-color:var(--brand)}
+    .card .icon{font-size:1.7rem;margin-bottom:10px}
+    .card h3{font-size:1.35rem;margin:6px 0}
+    .card p{color:var(--muted);margin:0}
+    .card.accent p{color:#e6f0ea}
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+    .lane{border-radius:28px;padding:34px;border:1px solid var(--line);min-height:360px}
+    .lane.small{background:#f5faf6}
+    .lane.pro{background:#f7f7fb}
+    .lane h3{font-size:2rem;margin:0 0 8px}
+    .lane ul{padding:0;margin:24px 0 0;list-style:none;display:grid;gap:12px}
+    .lane li{display:flex;gap:10px;align-items:flex-start}
+    .lane li::before{content:"✓";font-weight:900;color:var(--brand)}
+    .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .step{padding:28px;border-top:3px solid var(--brand);background:var(--cream);border-radius:0 0 22px 22px}
+    .step-num{font-size:.9rem;font-weight:900;color:var(--brand);text-transform:uppercase;letter-spacing:.08em}
+    .step h3{margin:8px 0}
+    .cta{
+      background:var(--ink);color:white;border-radius:34px;padding:46px;
+      display:grid;grid-template-columns:1.2fr .8fr;gap:30px;align-items:center
+    }
+    .cta h2{font-size:clamp(2rem,4vw,3.2rem);margin:0 0 10px;letter-spacing:-.04em;line-height:1}
+    .cta p{color:#cfd8d3}
+    .cta-actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+    footer{padding:44px 0 60px;color:var(--muted)}
+    .footer-grid{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
+    .tagline{font-weight:800;color:var(--ink)}
+    .modal{
+      position:fixed;inset:0;background:rgba(9,20,14,.58);display:none;align-items:center;justify-content:center;
+      padding:20px;z-index:40
+    }
+    .modal.show{display:flex}
+    .dialog{background:white;border-radius:24px;max-width:590px;width:100%;padding:28px;box-shadow:var(--shadow)}
+    .dialog-top{display:flex;justify-content:space-between;align-items:center;gap:20px}
+    .dialog h3{margin:0;font-size:1.7rem}
+    .close{border:0;background:#eef3ef;border-radius:12px;width:42px;height:42px;cursor:pointer;font-size:1.2rem}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
+    .field{display:grid;gap:7px}
+    .field.full{grid-column:1/-1}
+    label{font-weight:800;font-size:.92rem}
+    input,textarea,select{border:1px solid var(--line);border-radius:12px;padding:13px 14px;outline:none;background:white}
+    input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3px rgba(47,107,79,.09)}
+    .notice{background:var(--brand-soft);padding:13px 14px;border-radius:12px;color:var(--brand-dark);font-size:.92rem;margin-top:14px}
+    @media(max-width:900px){
+      .navlinks{display:none}
+      .hero-grid,.split,.cta{grid-template-columns:1fr}
+      .hero{padding-top:54px}
+      .phone{margin:10px auto 0}
+      .cards,.steps{grid-template-columns:1fr}
+      .cta-actions{justify-content:flex-start}
+    }
+    @media(max-width:560px){
+      .wrap{padding:0 16px}
+      nav .btn{display:none}
+      h1{font-size:3.4rem}
+      section{padding:60px 0}
+      .form-grid{grid-template-columns:1fr}
+      .field.full{grid-column:auto}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <nav>
+      <a href="#" class="logo">
+        <span class="logo-mark">G</span>
+        <span>Grannpojkarna</span>
+      </a>
+      <div class="navlinks">
+        <a href="#tjanster">Tjänster</a>
+        <a href="#sa-funkar-det">Så fungerar det</a>
+        <a href="#hjalpa">Tjäna extra</a>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('job')">Lägg upp ett jobb</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow">Nära. Enkelt. Pålitligt.</span>
+        <h1>Hjälpen finns runt hörnet.</h1>
+        <p class="lead">Behöver du en extra hand eller rätt företag för ett större projekt? Grannpojkarna matchar dig med personer och lokala företag som kan hjälpa dig – snabbt, tryggt och nära.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" onclick="openModal('job')">Jag behöver hjälp</button>
+          <button class="btn btn-light" onclick="openModal('helper')">Jag vill hjälpa till</button>
+        </div>
+        <div class="trust">
+          <span>✓ Verifierade profiler</span>
+          <span>✓ Omdömen</span>
+          <span>✓ Småjobb & större projekt</span>
+        </div>
+      </div>
+
+      <div class="phone" aria-label="Exempel på jobbflöde">
+        <div class="screen">
+          <div class="screen-top">
+            <div>
+              <div style="color:#607067;font-size:.9rem">Jobb nära dig</div>
+              <div class="screen-title">Täby · idag</div>
+            </div>
+            <div style="font-size:1.6rem">📍</div>
+          </div>
+          <div class="job">
+            <div class="job-head">
+              <div>
+                <h4>Hjälp att bära en soffa</h4>
+                <div style="color:#607067">Behöver 2 personer i cirka 1 timme.</div>
+              </div>
+              <div class="price">600 kr</div>
+            </div>
+            <div class="meta"><span>Idag 17:00</span><span>2,1 km bort</span><span>Småjobb</span></div>
+          </div>
+          <div class="job">
+            <div class="job-head">
+              <div>
+                <h4>Klippa häck</h4>
+                <div style="color:#607067">Ca 20 meter. Redskap finns.</div>
+              </div>
+              <div class="price">900 kr</div>
+            </div>
+            <div class="meta"><span>Lördag</span><span>4,8 km bort</span><span>Trädgård</span></div>
+          </div>
+          <div class="job">
+            <div class="job-head">
+              <div>
+                <h4>Måla om två sovrum</h4>
+                <div style="color:#607067">Företag får lämna offert.</div>
+              </div>
+              <div class="price">Offert</div>
+            </div>
+            <div class="meta"><span>Nästa vecka</span><span>7,4 km bort</span><span>Projekt</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tjanster">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Från småfix till stora projekt.</h2>
+        <p>Ett ställe för vardagshjälp, extrajobb och professionella tjänster.</p>
+      </div>
+
+      <div class="split">
+        <div class="lane small">
+          <div class="eyebrow">Grannhjälp</div>
+          <h3>Mindre jobb</h3>
+          <p>För jobb där en privatperson, student, pensionär eller småföretagare kan vara den perfekta hjälpen.</p>
+          <ul>
+            <li>Flytt- och bärhjälp</li>
+            <li>Montering och småfix</li>
+            <li>Trädgård och snöskottning</li>
+            <li>Enklare målning och rengöring</li>
+            <li>Bortforsling och hämtning</li>
+          </ul>
+        </div>
+
+        <div class="lane pro">
+          <div class="eyebrow">Grannpojkarna Pro</div>
+          <h3>Större projekt</h3>
+          <p>För mer omfattande arbeten där seriösa företag kan lämna offert och visa behörigheter.</p>
+          <ul>
+            <li>Renoveringar och bygg</li>
+            <li>El och VVS via behöriga företag</li>
+            <li>Tak, fasad och dränering</li>
+            <li>Kök och badrum</li>
+            <li>Större måleri- och fastighetsjobb</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sa-funkar-det" style="background:#fbfcfb">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Så enkelt ska det kännas.</h2>
+        <p>Du beskriver behovet. Grannpojkarna hjälper dig hitta rätt person eller företag.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">Steg 1</div>
+          <h3>Lägg upp jobbet</h3>
+          <p>Berätta vad som ska göras, var, när och vilken budget du tänkt dig.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">Steg 2</div>
+          <h3>Få svar</h3>
+          <p>Privatpersoner eller företag kan acceptera budgeten eller föreslå ett annat pris.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">Steg 3</div>
+          <h3>Välj och få hjälp</h3>
+          <p>Jämför omdömen, tillgänglighet och pris – och välj den som passar dig bäst.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="hjalpa">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Tjäna extra på det du redan kan.</h2>
+        <p>Har du några timmar ledigt? Hjälp någon i närheten med sådant du är bra på.</p>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="icon">🎓</div>
+          <h3>Student eller sommarjobbare</h3>
+          <p>Ta enkla jobb på kvällar, helger eller under lovet.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🧰</div>
+          <h3>Småföretagare</h3>
+          <p>Fyll luckor i kalendern och hitta nya kunder i ditt närområde.</p>
+        </div>
+        <div class="card accent">
+          <div class="icon">🟢</div>
+          <h3>Tillgänglig idag</h3>
+          <p>Slå på din tillgänglighet och få förfrågningar när någon behöver hjälp snabbt.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="cta">
+        <div>
+          <h2>Vad behöver du hjälp med?</h2>
+          <p>Beskriv jobbet på någon minut och se hur Grannpojkarna skulle kunna matcha dig.</p>
+        </div>
+        <div class="cta-actions">
+          <button class="btn btn-primary" onclick="openModal('job')">Lägg upp jobb</button>
+          <button class="btn btn-light" onclick="openModal('helper')">Bli hjälpare</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-grid">
+    <div>
+      <div class="logo" style="margin-bottom:10px"><span class="logo-mark">G</span><span>Grannpojkarna</span></div>
+      <div class="tagline">Hjälpen finns runt hörnet.</div>
+    </div>
+    <div>© 2026 Grannpojkarna · Prototyp</div>
+  </div>
+</footer>
+
+<div class="modal" id="modal">
+  <div class="dialog">
+    <div class="dialog-top">
+      <h3 id="modalTitle">Lägg upp ett jobb</h3>
+      <button class="close" onclick="closeModal()">×</button>
+    </div>
+    <form class="form-grid" onsubmit="submitDemo(event)">
+      <div class="field full">
+        <label id="mainLabel">Vad behöver du hjälp med?</label>
+        <textarea id="description" rows="4" placeholder="Exempel: Jag behöver hjälp att bära en soffa från våning 3..."></textarea>
+      </div>
+      <div class="field">
+        <label>Plats</label>
+        <input placeholder="Täby" />
+      </div>
+      <div class="field">
+        <label>När?</label>
+        <select>
+          <option>Idag</option>
+          <option>Imorgon</option>
+          <option>Den här veckan</option>
+          <option>Välj datum senare</option>
+        </select>
+      </div>
+      <div class="field">
+        <label id="budgetLabel">Budget</label>
+        <input placeholder="600 kr" />
+      </div>
+      <div class="field">
+        <label>Kategori</label>
+        <select>
+          <option>Flytt & bärhjälp</option>
+          <option>Trädgård</option>
+          <option>Montering & småfix</option>
+          <option>Målning</option>
+          <option>Rengöring</option>
+          <option>Större projekt</option>
+        </select>
+      </div>
+      <div class="field full">
+        <button class="btn btn-primary" style="width:100%" type="submit" id="submitBtn">Visa förfrågan</button>
+        <div class="notice">Detta är en klickbar prototyp. Ingen information skickas eller sparas ännu.</div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  let mode = 'job';
+
+  function openModal(type){
+    mode = type;
+    const modal = document.getElementById('modal');
+    const title = document.getElementById('modalTitle');
+    const label = document.getElementById('mainLabel');
+    const budget = document.getElementById('budgetLabel');
+    const submit = document.getElementById('submitBtn');
+    const desc = document.getElementById('description');
+
+    if(type === 'helper'){
+      title.textContent = 'Bli hjälpare';
+      label.textContent = 'Vad kan du hjälpa till med?';
+      budget.textContent = 'Önskat pris';
+      submit.textContent = 'Skapa hjälparprofil';
+      desc.placeholder = 'Exempel: Flytt, montering, trädgård och enklare målning...';
+    } else {
+      title.textContent = 'Lägg upp ett jobb';
+      label.textContent = 'Vad behöver du hjälp med?';
+      budget.textContent = 'Budget';
+      submit.textContent = 'Visa förfrågan';
+      desc.placeholder = 'Exempel: Jag behöver hjälp att bära en soffa från våning 3...';
+    }
+    modal.classList.add('show');
+  }
+
+  function closeModal(){
+    document.getElementById('modal').classList.remove('show');
+  }
+
+  function submitDemo(e){
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    btn.textContent = mode === 'helper' ? 'Profil skapad ✓' : 'Förfrågan skapad ✓';
+    btn.style.background = '#1f4a38';
+    setTimeout(closeModal, 900);
+  }
+
+  document.getElementById('modal').addEventListener('click', function(e){
+    if(e.target === this) closeModal();
+  });
+</script>
+</body>
+</html>

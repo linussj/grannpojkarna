@@ -43,7 +43,7 @@ nav{min-height:74px;display:flex;align-items:center;justify-content:space-betwee
 .notification-button:hover{background:#f8faf8}
 .notification-button[aria-expanded="true"]{background:var(--brand-soft);border-color:#b8d1c2}
 .notification-badge{position:absolute;right:-5px;top:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#b23d2b;color:white;border:2px solid white;display:grid;place-items:center;font-size:.67rem;font-weight:900;line-height:1}
-.notification-center{position:fixed;right:max(20px,calc((100vw - 1180px)/2 + 24px));top:84px;z-index:35;width:min(390px,calc(100vw - 32px));max-height:min(600px,calc(100vh - 104px));overflow:hidden;background:white;border:1px solid var(--line);border-radius:20px;box-shadow:0 22px 60px rgba(20,38,29,.2)}
+.notification-center{position:fixed;right:max(20px,calc((100vw - 1180px)/2 + 24px));top:84px;z-index:55;width:min(390px,calc(100vw - 32px));max-height:min(600px,calc(100vh - 104px));overflow:hidden;background:white;border:1px solid var(--line);border-radius:20px;box-shadow:0 22px 60px rgba(20,38,29,.2)}
 .notification-center-head{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;padding:18px;border-bottom:1px solid var(--line)}
 .notification-center-head>div{display:grid;gap:1px}
 .notification-center-head>div>strong{font-size:1.1rem}
@@ -148,8 +148,25 @@ footer{padding:44px 0 60px;color:var(--muted)}
 .modal{position:fixed;inset:0;background:rgba(9,20,14,.58);display:none;align-items:center;justify-content:center;padding:20px;z-index:40;overflow:auto}
 .modal.show{display:flex}
 .dialog{background:white;border-radius:24px;max-width:620px;width:100%;padding:28px;box-shadow:var(--shadow);max-height:calc(100vh - 40px);overflow:auto}
+#modal{gap:16px}
+.job-live-panel{width:310px;max-height:calc(100vh - 40px);overflow:auto;background:#f5faf6;border:1px solid #cfe0d5;border-radius:24px;padding:20px;box-shadow:var(--shadow);align-self:center}
+.job-live-panel-head{display:flex;align-items:flex-start;gap:11px;padding-bottom:15px;border-bottom:1px solid #dbe8df}
+.job-live-panel-head .availability-dot{margin-top:7px;background:#2c9a58;box-shadow:0 0 0 4px rgba(44,154,88,.14)}
+.job-live-panel-head>div{display:grid;gap:2px}
+.job-live-panel-head>div>span{font-size:.78rem;color:var(--muted)}
+.job-live-list{display:grid;gap:9px;margin-top:14px}
+.job-live-person{display:grid;grid-template-columns:42px 1fr;gap:10px;align-items:center;padding:11px;background:white;border:1px solid var(--line);border-radius:15px}
+.job-live-person-avatar{width:42px;height:42px;border-radius:13px;background:var(--brand-soft);display:grid;place-items:center;overflow:hidden;color:var(--brand-dark);font-weight:900}
+.job-live-person-avatar img{width:100%;height:100%;object-fit:cover}
+.job-live-person-copy{display:grid;gap:2px;min-width:0}
+.job-live-person-copy strong{font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.job-live-person-copy span{font-size:.73rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.job-live-person-copy .availability-badge{justify-self:start;font-size:.67rem;padding:3px 6px}
+.job-live-panel .availability-disclaimer{line-height:1.45}
 .account-dialog{max-width:820px}
 .dialog-top{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.account-title-row{display:flex;align-items:center;gap:10px;min-width:0}
+.account-title-row .account-notification-button{width:39px;height:39px;border-radius:12px;flex:0 0 auto}
 .dialog-corner-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px}
 .account-logout{background:#a93b2b;color:white;border-color:#a93b2b;padding:10px 14px}
 .account-logout:hover:not(:disabled){background:#842b20;border-color:#842b20}
@@ -325,6 +342,9 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .performer-card>.btn{margin-top:auto;width:100%}
 .availability-disclaimer{margin:14px 0 0;color:var(--muted);font-size:.8rem}
 
+@media(max-width:1000px){
+  .job-live-panel{display:none}
+}
 @media(max-width:900px){
   .navlinks{display:none}
   .hero-grid,.split,.cta{grid-template-columns:1fr}

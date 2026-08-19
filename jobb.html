@@ -203,7 +203,13 @@
 <div class="modal" id="accountModal">
   <div class="dialog account-dialog">
     <div class="dialog-top">
-      <h3 id="accountTitle">Logga in eller skapa konto</h3>
+      <div class="account-title-row">
+        <h3 id="accountTitle">Logga in eller skapa konto</h3>
+        <button class="notification-button account-notification-button hidden" id="accountNotificationButton" type="button" onclick="toggleNotificationCenter()" aria-label="Öppna notiser" aria-expanded="false">
+          <span aria-hidden="true">🔔</span>
+          <span class="notification-badge hidden" id="accountNotificationBadge">0</span>
+        </button>
+      </div>
       <div class="dialog-corner-actions">
         <button class="btn btn-danger btn-small account-logout hidden" id="accountLogoutBtn" type="button" onclick="signOut()">Logga ut</button>
         <button class="close" onclick="closeAccountModal()" aria-label="Stäng">×</button>

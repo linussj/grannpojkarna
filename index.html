@@ -179,12 +179,26 @@
         <a href="mailto:info@grannpojkarna.se">Kontakt</a>
       </div>
       <div class="nav-actions">
+        <button class="notification-button hidden" id="notificationButton" type="button" onclick="toggleNotificationCenter()" aria-label="Öppna notiser" aria-expanded="false">
+          <span aria-hidden="true">🔔</span>
+          <span class="notification-badge hidden" id="notificationBadge">0</span>
+        </button>
         <button class="btn btn-light" id="accountBtn" onclick="openAccountModal()">Logga in</button>
         <button class="btn btn-primary desktop-primary" onclick="openModal('job')">Lägg upp ett jobb</button>
       </div>
     </nav>
   </div>
 </header>
+
+<aside class="notification-center hidden" id="notificationCenter" aria-label="Notiser">
+  <div class="notification-center-head">
+    <div><strong>Notiser</strong><span>Det senaste om dina jobb</span></div>
+    <button class="link-button" id="markAllNotificationsBtn" type="button" onclick="markAllNotificationsRead()">Markera alla som lästa</button>
+  </div>
+  <div class="notification-list" id="notificationList">
+    <div class="account-meta">Hämtar notiser…</div>
+  </div>
+</aside>
 
 <main>
   <section class="hero">
@@ -604,7 +618,24 @@
         <div class="profile-identity">
           <div class="account-avatar" id="accountAvatar" aria-hidden="true">G</div>
           <div>
-            <h3 id="accountName">Mitt konto</h3>
+            <div class="account-name-row">
+              <h3 id="accountName">Mitt konto</h3>
+              <div class="availability-menu-wrap hidden" id="availabilityMenuWrap">
+                <button class="availability-status-button" id="availabilityStatusButton" type="button" onclick="toggleAvailabilityMenu()" aria-expanded="false">
+                  <span class="availability-dot" aria-hidden="true"></span>
+                  <span id="availabilityStatusText">Sätt status</span>
+                </button>
+                <div class="availability-popover hidden" id="availabilityPopover">
+                  <strong>Extra synlighet</strong>
+                  <span id="availabilityExpiry">Visa att du kan hjälpa till med kort varsel.</span>
+                  <div class="availability-actions">
+                    <button class="btn btn-primary btn-small" id="availabilityNowBtn" type="button" onclick="saveAvailabilityStatus('now')">Jag kan hjälpa nu</button>
+                    <button class="btn btn-light btn-small" id="availabilityTodayBtn" type="button" onclick="saveAvailabilityStatus('today')">Jag kan hjälpa idag</button>
+                    <button class="link-button hidden" id="clearAvailabilityBtn" type="button" onclick="saveAvailabilityStatus('unavailable')">Ta bort min status</button>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div class="account-meta" id="accountEmail"></div>
           </div>
         </div>
@@ -660,20 +691,6 @@
             <div class="field">
               <label for="editProfileSkills">Vad kan du hjälpa till med?</label>
               <input id="editProfileSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" />
-            </div>
-            <div class="availability-card hidden" id="availabilityCard">
-              <div class="availability-card-copy">
-                <span class="availability-dot" aria-hidden="true"></span>
-                <div>
-                  <strong id="availabilityStatusText">Ingen extra synlighet aktiv</strong>
-                  <span id="availabilityExpiry">Få extra synlighet när du kan hjälpa till med kort varsel.</span>
-                </div>
-              </div>
-              <div class="availability-actions">
-                <button class="btn btn-primary btn-small" id="availabilityNowBtn" type="button" onclick="saveAvailabilityStatus('now')">Jag kan hjälpa nu</button>
-                <button class="btn btn-light btn-small" id="availabilityTodayBtn" type="button" onclick="saveAvailabilityStatus('today')">Jag kan hjälpa idag</button>
-                <button class="link-button hidden" id="clearAvailabilityBtn" type="button" onclick="saveAvailabilityStatus('unavailable')">Ta bort min status</button>
-              </div>
             </div>
           </div>
           <button class="btn btn-primary" id="saveOptionalProfileBtn" type="button" onclick="saveOptionalProfile()">Spara profil</button>

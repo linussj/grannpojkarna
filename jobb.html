@@ -22,12 +22,26 @@
         <a href="index.html#personlig-hjalp">Personlig hjälp</a>
       </div>
       <div class="nav-actions">
+        <button class="notification-button hidden" id="notificationButton" type="button" onclick="toggleNotificationCenter()" aria-label="Öppna notiser" aria-expanded="false">
+          <span aria-hidden="true">🔔</span>
+          <span class="notification-badge hidden" id="notificationBadge">0</span>
+        </button>
         <button class="btn btn-light" id="accountBtn" onclick="openAccountModal()">Logga in</button>
         <a class="btn btn-primary desktop-primary" href="index.html?newJob=1">Lägg upp jobb</a>
       </div>
     </nav>
   </div>
 </header>
+
+<aside class="notification-center hidden" id="notificationCenter" aria-label="Notiser">
+  <div class="notification-center-head">
+    <div><strong>Notiser</strong><span>Det senaste om dina jobb</span></div>
+    <button class="link-button" id="markAllNotificationsBtn" type="button" onclick="markAllNotificationsRead()">Markera alla som lästa</button>
+  </div>
+  <div class="notification-list" id="notificationList">
+    <div class="account-meta">Hämtar notiser…</div>
+  </div>
+</aside>
 
 <main>
   <section class="jobs-hero">
@@ -41,7 +55,32 @@
     </div>
   </section>
 
-  <section>
+  <section class="availability-section hidden" id="availabilitySection">
+    <div class="wrap">
+      <div class="availability-section-head">
+        <div>
+          <span class="eyebrow">Tillgängliga nu</span>
+          <h2>Hitta hjälp med kort varsel</h2>
+          <p>Se utförare som själva har markerat att de kan hjälpa till nu eller senare idag.</p>
+        </div>
+        <a class="btn btn-primary" href="index.html?newJob=1">Lägg upp ett jobb</a>
+      </div>
+      <div class="performer-filters">
+        <div class="field">
+          <label for="performerSearchFilter">Vad behöver du hjälp med?</label>
+          <input id="performerSearchFilter" type="search" placeholder="Exempel: flytt eller montering" />
+        </div>
+        <div class="field">
+          <label for="performerAreaFilter">Ort eller område</label>
+          <input id="performerAreaFilter" placeholder="Exempel: Täby" />
+        </div>
+      </div>
+      <div class="account-meta performers-count" id="performersCount">Hämtar tillgängliga utförare…</div>
+      <div class="performer-grid" id="availablePerformers"></div>
+    </div>
+  </section>
+
+  <section id="lediga-jobb">
     <div class="wrap jobs-layout">
       <aside class="filters" id="jobFilters" aria-label="Filtrera jobb">
         <div class="filter-actions">
@@ -254,7 +293,24 @@
         <div class="profile-identity">
           <div class="account-avatar" id="accountAvatar" aria-hidden="true">G</div>
           <div>
-            <h3 id="accountName">Mitt konto</h3>
+            <div class="account-name-row">
+              <h3 id="accountName">Mitt konto</h3>
+              <div class="availability-menu-wrap hidden" id="availabilityMenuWrap">
+                <button class="availability-status-button" id="availabilityStatusButton" type="button" onclick="toggleAvailabilityMenu()" aria-expanded="false">
+                  <span class="availability-dot" aria-hidden="true"></span>
+                  <span id="availabilityStatusText">Sätt status</span>
+                </button>
+                <div class="availability-popover hidden" id="availabilityPopover">
+                  <strong>Extra synlighet</strong>
+                  <span id="availabilityExpiry">Visa att du kan hjälpa till med kort varsel.</span>
+                  <div class="availability-actions">
+                    <button class="btn btn-primary btn-small" id="availabilityNowBtn" type="button" onclick="saveAvailabilityStatus('now')">Jag kan hjälpa nu</button>
+                    <button class="btn btn-light btn-small" id="availabilityTodayBtn" type="button" onclick="saveAvailabilityStatus('today')">Jag kan hjälpa idag</button>
+                    <button class="link-button hidden" id="clearAvailabilityBtn" type="button" onclick="saveAvailabilityStatus('unavailable')">Ta bort min status</button>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div class="account-meta" id="accountEmail"></div>
           </div>
         </div>
@@ -310,20 +366,6 @@
             <div class="field">
               <label for="editProfileSkills">Vad kan du hjälpa till med?</label>
               <input id="editProfileSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" />
-            </div>
-            <div class="availability-card hidden" id="availabilityCard">
-              <div class="availability-card-copy">
-                <span class="availability-dot" aria-hidden="true"></span>
-                <div>
-                  <strong id="availabilityStatusText">Ingen extra synlighet aktiv</strong>
-                  <span id="availabilityExpiry">Få extra synlighet när du kan hjälpa till med kort varsel.</span>
-                </div>
-              </div>
-              <div class="availability-actions">
-                <button class="btn btn-primary btn-small" id="availabilityNowBtn" type="button" onclick="saveAvailabilityStatus('now')">Jag kan hjälpa nu</button>
-                <button class="btn btn-light btn-small" id="availabilityTodayBtn" type="button" onclick="saveAvailabilityStatus('today')">Jag kan hjälpa idag</button>
-                <button class="link-button hidden" id="clearAvailabilityBtn" type="button" onclick="saveAvailabilityStatus('unavailable')">Ta bort min status</button>
-              </div>
             </div>
           </div>
           <button class="btn btn-primary" id="saveOptionalProfileBtn" type="button" onclick="saveOptionalProfile()">Spara profil</button>

@@ -42,6 +42,7 @@
       display:grid;place-items:center;color:white;font-size:1.25rem;box-shadow:var(--shadow)
     }
     .navlinks{display:flex;gap:28px;color:var(--muted);font-weight:600}
+    .nav-actions{display:flex;align-items:center;gap:10px}
     .btn{
       border:0;border-radius:14px;padding:14px 20px;font-weight:800;cursor:pointer;
       transition:.2s ease;display:inline-flex;align-items:center;justify-content:center;gap:8px
@@ -127,6 +128,21 @@
     input,textarea,select{border:1px solid var(--line);border-radius:12px;padding:13px 14px;outline:none;background:white}
     input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3px rgba(47,107,79,.09)}
     .notice{background:var(--brand-soft);padding:13px 14px;border-radius:12px;color:var(--brand-dark);font-size:.92rem;margin-top:14px}
+    .notice.error{background:#fff0ed;color:#8f2d1e}
+    .notice.success{background:#e8f6ed;color:#205b3c}
+    .hidden{display:none!important}
+    .auth-intro{color:var(--muted);margin:8px 0 0}
+    .auth-stack{display:grid;gap:14px;margin-top:22px}
+    .account-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin:18px 0}
+    .account-meta{color:var(--muted);font-size:.95rem}
+    .account-actions{display:flex;gap:10px;flex-wrap:wrap}
+    .job-list{display:grid;gap:12px;margin-top:18px;max-height:320px;overflow:auto}
+    .job-row{border:1px solid var(--line);border-radius:16px;padding:16px;background:#fbfcfb}
+    .job-row-top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+    .job-row h4{margin:0 0 4px}
+    .job-row p{margin:6px 0;color:var(--muted)}
+    .status-pill{background:var(--brand-soft);color:var(--brand-dark);font-size:.8rem;font-weight:800;padding:5px 9px;border-radius:999px;white-space:nowrap}
+    .link-button{border:0;background:none;padding:0;color:var(--brand);font-weight:800;cursor:pointer;text-decoration:underline}
     @media(max-width:900px){
       .navlinks{display:none}
       .hero-grid,.split,.cta{grid-template-columns:1fr}
@@ -137,7 +153,8 @@
     }
     @media(max-width:560px){
       .wrap{padding:0 16px}
-      nav .btn{display:none}
+      .nav-actions .btn-primary{display:none}
+      .nav-actions .btn-light{padding:10px 13px}
       h1{font-size:3.4rem}
       section{padding:60px 0}
       .form-grid{grid-template-columns:1fr}
@@ -157,8 +174,12 @@
         <a href="#tjanster">Tjänster</a>
         <a href="#sa-funkar-det">Så fungerar det</a>
         <a href="#hjalpa">Tjäna extra</a>
+        <a href="mailto:info@grannpojkarna.se">Kontakt</a>
       </div>
-      <button class="btn btn-primary" onclick="openModal('job')">Lägg upp ett jobb</button>
+      <div class="nav-actions">
+        <button class="btn btn-light" id="accountBtn" onclick="openAccountModal()">Logga in</button>
+        <button class="btn btn-primary" onclick="openModal('job')">Lägg upp ett jobb</button>
+      </div>
     </nav>
   </div>
 </header>
@@ -336,7 +357,8 @@
       <div class="logo" style="margin-bottom:10px"><span class="logo-mark">G</span><span>Grannpojkarna</span></div>
       <div class="tagline">Hjälpen finns runt hörnet.</div>
     </div>
-    <div>© 2026 Grannpojkarna · Prototyp</div>
+    <div>© 2026 Grannpojkarna · Pilot</div>
+    <div><a href="mailto:info@grannpojkarna.se">info@grannpojkarna.se</a></div>
   </div>
 </footer>
 
@@ -346,18 +368,18 @@
       <h3 id="modalTitle">Lägg upp ett jobb</h3>
       <button class="close" onclick="closeModal()">×</button>
     </div>
-    <form class="form-grid" onsubmit="submitDemo(event)">
+    <form class="form-grid" id="jobForm" onsubmit="submitJob(event)">
       <div class="field full">
         <label id="mainLabel">Vad behöver du hjälp med?</label>
-        <textarea id="description" rows="4" placeholder="Exempel: Jag behöver hjälp att bära en soffa från våning 3..."></textarea>
+        <textarea id="description" rows="4" placeholder="Exempel: Jag behöver hjälp att bära en soffa från våning 3..." required></textarea>
       </div>
       <div class="field">
         <label>Plats</label>
-        <input placeholder="Täby" />
+        <input id="jobLocation" placeholder="Upplands Väsby" required />
       </div>
       <div class="field">
         <label>När?</label>
-        <select>
+        <select id="jobWhen" required>
           <option>Idag</option>
           <option>Imorgon</option>
           <option>Den här veckan</option>
@@ -366,11 +388,11 @@
       </div>
       <div class="field">
         <label id="budgetLabel">Budget</label>
-        <input placeholder="600 kr" />
+        <input id="jobBudget" inputmode="numeric" placeholder="600 kr" required />
       </div>
       <div class="field">
         <label>Kategori</label>
-        <select>
+        <select id="jobCategory" required>
           <option>Flytt & bärhjälp</option>
           <option>Trädgård</option>
           <option>Montering & småfix</option>
@@ -380,56 +402,83 @@
         </select>
       </div>
       <div class="field full">
-        <button class="btn btn-primary" style="width:100%" type="submit" id="submitBtn">Visa förfrågan</button>
-        <div class="notice">Detta är en klickbar prototyp. Ingen information skickas eller sparas ännu.</div>
+        <button class="btn btn-primary" style="width:100%" type="submit" id="submitBtn">Publicera jobb</button>
+        <div class="notice hidden" id="jobNotice" role="status"></div>
       </div>
     </form>
   </div>
 </div>
 
-<script>
-  let mode = 'job';
+<div class="modal" id="accountModal">
+  <div class="dialog">
+    <div class="dialog-top">
+      <h3 id="accountTitle">Logga in eller skapa konto</h3>
+      <button class="close" onclick="closeAccountModal()" aria-label="Stäng">×</button>
+    </div>
 
-  function openModal(type){
-    mode = type;
-    const modal = document.getElementById('modal');
-    const title = document.getElementById('modalTitle');
-    const label = document.getElementById('mainLabel');
-    const budget = document.getElementById('budgetLabel');
-    const submit = document.getElementById('submitBtn');
-    const desc = document.getElementById('description');
+    <div id="authEmailStep" class="auth-stack">
+      <p class="auth-intro">Ange din mejladress så skickar vi en sexsiffrig engångskod.</p>
+      <div class="field">
+        <label for="authEmail">Mejladress</label>
+        <input id="authEmail" type="email" autocomplete="email" placeholder="du@exempel.se" required />
+      </div>
+      <button class="btn btn-primary" id="sendCodeBtn" onclick="sendLoginCode()">Skicka kod</button>
+      <div class="notice hidden" id="authEmailNotice" role="status"></div>
+    </div>
 
-    if(type === 'helper'){
-      title.textContent = 'Bli hjälpare';
-      label.textContent = 'Vad kan du hjälpa till med?';
-      budget.textContent = 'Önskat pris';
-      submit.textContent = 'Skapa hjälparprofil';
-      desc.placeholder = 'Exempel: Flytt, montering, trädgård och enklare målning...';
-    } else {
-      title.textContent = 'Lägg upp ett jobb';
-      label.textContent = 'Vad behöver du hjälp med?';
-      budget.textContent = 'Budget';
-      submit.textContent = 'Visa förfrågan';
-      desc.placeholder = 'Exempel: Jag behöver hjälp att bära en soffa från våning 3...';
-    }
-    modal.classList.add('show');
-  }
+    <div id="authCodeStep" class="auth-stack hidden">
+      <p class="auth-intro">Vi har skickat en kod till <strong id="codeEmail"></strong>.</p>
+      <div class="field">
+        <label for="authCode">Sexsiffrig kod</label>
+        <input id="authCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required />
+      </div>
+      <button class="btn btn-primary" id="verifyCodeBtn" onclick="verifyLoginCode()">Verifiera och fortsätt</button>
+      <button class="link-button" onclick="showEmailStep()">Använd en annan mejladress</button>
+      <div class="notice hidden" id="authCodeNotice" role="status"></div>
+    </div>
 
-  function closeModal(){
-    document.getElementById('modal').classList.remove('show');
-  }
+    <div id="profileStep" class="auth-stack hidden">
+      <p class="auth-intro">Berätta hur du vill använda Grannpojkarna.</p>
+      <div class="field">
+        <label for="profileName">Namn</label>
+        <input id="profileName" autocomplete="name" placeholder="För- och efternamn" required />
+      </div>
+      <div class="field">
+        <label for="profilePhone">Telefonnummer</label>
+        <input id="profilePhone" type="tel" autocomplete="tel" placeholder="070-123 45 67" />
+      </div>
+      <div class="field">
+        <label for="profileRole">Jag vill</label>
+        <select id="profileRole">
+          <option value="customer">Få hjälp</option>
+          <option value="helper">Hjälpa till</option>
+          <option value="company">Registrera företag</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="saveProfileBtn" onclick="saveProfile()">Skapa konto</button>
+      <div class="notice hidden" id="profileNotice" role="status"></div>
+    </div>
 
-  function submitDemo(e){
-    e.preventDefault();
-    const btn = document.getElementById('submitBtn');
-    btn.textContent = mode === 'helper' ? 'Profil skapad ✓' : 'Förfrågan skapad ✓';
-    btn.style.background = '#1f4a38';
-    setTimeout(closeModal, 900);
-  }
+    <div id="accountStep" class="hidden">
+      <div class="account-head">
+        <div>
+          <h3 id="accountName">Mitt konto</h3>
+          <div class="account-meta" id="accountEmail"></div>
+        </div>
+        <span class="status-pill" id="accountRole">Kund</span>
+      </div>
+      <div class="account-actions">
+        <button class="btn btn-primary" onclick="openJobFromAccount()">Lägg upp jobb</button>
+        <button class="btn btn-light" onclick="signOut()">Logga ut</button>
+      </div>
+      <div class="job-list" id="myJobs"></div>
+      <div class="notice hidden" id="accountNotice" role="status"></div>
+    </div>
+  </div>
+</div>
 
-  document.getElementById('modal').addEventListener('click', function(e){
-    if(e.target === this) closeModal();
-  });
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

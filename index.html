@@ -161,16 +161,18 @@
       .field.full{grid-column:auto}
     }
   </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <header>
   <div class="wrap">
     <nav>
-      <a href="#" class="logo">
+      <a href="index.html" class="logo">
         <span class="logo-mark">G</span>
         <span>Grannpojkarna</span>
       </a>
       <div class="navlinks">
+        <a href="jobb.html">Hitta jobb</a>
         <a href="#tjanster">Tjänster</a>
         <a href="#sa-funkar-det">Så fungerar det</a>
         <a href="#hjalpa">Tjäna extra</a>
@@ -178,7 +180,7 @@
       </div>
       <div class="nav-actions">
         <button class="btn btn-light" id="accountBtn" onclick="openAccountModal()">Logga in</button>
-        <button class="btn btn-primary" onclick="openModal('job')">Lägg upp ett jobb</button>
+        <button class="btn btn-primary desktop-primary" onclick="openModal('job')">Lägg upp ett jobb</button>
       </div>
     </nav>
   </div>
@@ -193,7 +195,7 @@
         <p class="lead">Behöver du en extra hand eller rätt företag för ett större projekt? Grannpojkarna matchar dig med personer och lokala företag som kan hjälpa dig – snabbt, tryggt och nära.</p>
         <div class="hero-actions">
           <button class="btn btn-primary" onclick="openModal('job')">Jag behöver hjälp</button>
-          <button class="btn btn-light" onclick="openModal('helper')">Jag vill hjälpa till</button>
+          <a class="btn btn-light" href="jobb.html">Jag vill hitta jobb</a>
         </div>
         <div class="trust">
           <span>✓ Verifierade profiler</span>
@@ -335,6 +337,19 @@
     </div>
   </section>
 
+  <section class="callback-section" id="personlig-hjalp">
+    <div class="wrap">
+      <div class="callback-card">
+        <div class="callback-icon" aria-hidden="true">☎</div>
+        <div>
+          <h2>Vill du ha hjälp över telefon?</h2>
+          <p>Vi ringer upp dig och hjälper dig att lägga ut jobbet. Det kostar inget.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openCallbackModal()">Bli uppringd</button>
+      </div>
+    </div>
+  </section>
+
   <section>
     <div class="wrap">
       <div class="cta">
@@ -344,7 +359,7 @@
         </div>
         <div class="cta-actions">
           <button class="btn btn-primary" onclick="openModal('job')">Lägg upp jobb</button>
-          <button class="btn btn-light" onclick="openModal('helper')">Bli hjälpare</button>
+          <a class="btn btn-light" href="jobb.html">Hitta jobb nära dig</a>
         </div>
       </div>
     </div>
@@ -370,6 +385,10 @@
     </div>
     <form class="form-grid" id="jobForm" onsubmit="submitJob(event)">
       <div class="field full">
+        <label for="jobTitle">Rubrik</label>
+        <input id="jobTitle" maxlength="100" placeholder="Exempel: Bärhjälp för en soffa" required />
+      </div>
+      <div class="field full">
         <label id="mainLabel">Vad behöver du hjälp med?</label>
         <textarea id="description" rows="4" placeholder="Exempel: Jag behöver hjälp att bära en soffa från våning 3..." required></textarea>
       </div>
@@ -391,6 +410,14 @@
         <input id="jobBudget" inputmode="numeric" placeholder="600 kr" required />
       </div>
       <div class="field">
+        <label for="jobPriceType">Ersättning</label>
+        <select id="jobPriceType" required>
+          <option value="fixed">Fast pris</option>
+          <option value="hourly">Timpris</option>
+          <option value="quote">Öppen för förslag</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Kategori</label>
         <select id="jobCategory" required>
           <option>Flytt & bärhjälp</option>
@@ -398,12 +425,63 @@
           <option>Montering & småfix</option>
           <option>Målning</option>
           <option>Rengöring</option>
+          <option>Bortforsling & transport</option>
+          <option>Djurpassning</option>
+          <option>Teknikhjälp</option>
           <option>Större projekt</option>
+          <option>Övrigt</option>
         </select>
       </div>
       <div class="field full">
         <button class="btn btn-primary" style="width:100%" type="submit" id="submitBtn">Publicera jobb</button>
         <div class="notice hidden" id="jobNotice" role="status"></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="callbackModal">
+  <div class="dialog">
+    <div class="dialog-top">
+      <div>
+        <h3>Bli uppringd</h3>
+        <p class="auth-intro">Vi hjälper dig att beskriva och lägga ut jobbet.</p>
+      </div>
+      <button class="close" onclick="closeCallbackModal()" aria-label="Stäng">×</button>
+    </div>
+    <form class="form-grid" id="callbackForm" onsubmit="submitCallbackRequest(event)">
+      <div class="field">
+        <label for="callbackName">Namn</label>
+        <input id="callbackName" autocomplete="name" maxlength="100" required />
+      </div>
+      <div class="field">
+        <label for="callbackPhone">Telefonnummer</label>
+        <input id="callbackPhone" type="tel" autocomplete="tel" placeholder="070-123 45 67" maxlength="30" required />
+      </div>
+      <div class="field full">
+        <label for="callbackTime">När passar det att vi ringer?</label>
+        <select id="callbackTime" required>
+          <option value="Förmiddag 09–12">Förmiddag 09–12</option>
+          <option value="Eftermiddag 12–17">Eftermiddag 12–17</option>
+          <option value="Kväll 17–20">Kväll 17–20</option>
+          <option value="När som helst">När som helst</option>
+        </select>
+      </div>
+      <div class="field full">
+        <label for="callbackDescription">Vad behöver du hjälp med?</label>
+        <textarea id="callbackDescription" rows="4" maxlength="1000" placeholder="Beskriv kort vad du vill ha hjälp med" required></textarea>
+      </div>
+      <div class="honeypot" aria-hidden="true">
+        <label for="callbackWebsite">Webbplats</label>
+        <input id="callbackWebsite" tabindex="-1" autocomplete="off" />
+      </div>
+      <div class="field full checkbox-row">
+        <input id="callbackConsent" type="checkbox" required />
+        <label for="callbackConsent">Jag godkänner att Grannpojkarna kontaktar mig om min förfrågan.</label>
+      </div>
+      <div class="field full">
+        <button class="btn btn-primary" style="width:100%" type="submit" id="callbackSubmitBtn">Skicka förfrågan</button>
+        <div class="notice hidden" id="callbackNotice" role="status"></div>
       </div>
     </form>
   </div>
@@ -448,15 +526,50 @@
         <input id="profilePhone" type="tel" autocomplete="tel" placeholder="070-123 45 67" />
       </div>
       <div class="field">
-        <label for="profileRole">Jag vill</label>
-        <select id="profileRole">
-          <option value="customer">Få hjälp</option>
-          <option value="helper">Hjälpa till</option>
-          <option value="company">Registrera företag</option>
+        <label for="profileAccountType">Kontotyp</label>
+        <select id="profileAccountType">
+          <option value="private">Privatperson</option>
+          <option value="company">Företag</option>
         </select>
+      </div>
+      <div class="field">
+        <label>Hur vill du använda Grannpojkarna?</label>
+        <div class="choice-grid">
+          <div class="choice">
+            <input type="radio" name="profileUse" id="profileUseCustomer" value="customer" checked />
+            <label for="profileUseCustomer"><strong>Beställa</strong><span>Lägga upp jobb</span></label>
+          </div>
+          <div class="choice">
+            <input type="radio" name="profileUse" id="profileUsePerformer" value="performer" />
+            <label for="profileUsePerformer"><strong>Utföra</strong><span>Hitta och söka jobb</span></label>
+          </div>
+          <div class="choice">
+            <input type="radio" name="profileUse" id="profileUseBoth" value="both" />
+            <label for="profileUseBoth"><strong>Båda</strong><span>Beställa och utföra</span></label>
+          </div>
+        </div>
       </div>
       <button class="btn btn-primary" id="saveProfileBtn" onclick="saveProfile()">Skapa konto</button>
       <div class="notice hidden" id="profileNotice" role="status"></div>
+    </div>
+
+    <div id="performerStep" class="auth-stack hidden">
+      <p class="auth-intro">Aktivera din utförarprofil för att kunna anmäla intresse för jobb.</p>
+      <div class="field">
+        <label for="performerArea">Område</label>
+        <input id="performerArea" maxlength="120" placeholder="Exempel: Upplands Väsby med omnejd" />
+      </div>
+      <div class="field">
+        <label for="performerSkills">Vad kan du hjälpa till med?</label>
+        <input id="performerSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" />
+      </div>
+      <div class="field">
+        <label for="performerBio">Kort presentation</label>
+        <textarea id="performerBio" rows="4" maxlength="600" placeholder="Berätta kort om dig och din erfarenhet"></textarea>
+      </div>
+      <button class="btn btn-primary" id="savePerformerBtn" onclick="savePerformerProfile()">Aktivera utförarprofil</button>
+      <button class="btn btn-light" onclick="showAccountStep()">Avbryt</button>
+      <div class="notice hidden" id="performerNotice" role="status"></div>
     </div>
 
     <div id="accountStep" class="hidden">
@@ -465,10 +578,12 @@
           <h3 id="accountName">Mitt konto</h3>
           <div class="account-meta" id="accountEmail"></div>
         </div>
-        <span class="status-pill" id="accountRole">Kund</span>
+        <span class="status-pill" id="accountRole">Beställare</span>
       </div>
       <div class="account-actions">
         <button class="btn btn-primary" onclick="openJobFromAccount()">Lägg upp jobb</button>
+        <a class="btn btn-light hidden" id="findJobsBtn" href="jobb.html">Hitta jobb</a>
+        <button class="btn btn-light" id="enablePerformerBtn" onclick="showPerformerStep()">Aktivera utförarprofil</button>
         <button class="btn btn-light" onclick="signOut()">Logga ut</button>
       </div>
       <div class="job-list" id="myJobs"></div>

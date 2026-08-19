@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hitta jobb nära dig – Grannpojkarna</title>
+  <meta name="description" content="Se lediga småjobb och uppdrag nära dig. Filtrera på kategori, plats, tid och ersättning." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="jobs">
+<header>
+  <div class="wrap">
+    <nav>
+      <a href="index.html" class="logo">
+        <span class="logo-mark">G</span>
+        <span>Grannpojkarna</span>
+      </a>
+      <div class="navlinks">
+        <a href="jobb.html" class="active">Hitta jobb</a>
+        <a href="index.html#tjanster">Tjänster</a>
+        <a href="index.html#sa-funkar-det">Så fungerar det</a>
+        <a href="index.html#personlig-hjalp">Personlig hjälp</a>
+      </div>
+      <div class="nav-actions">
+        <button class="btn btn-light" id="accountBtn" onclick="openAccountModal()">Logga in</button>
+        <a class="btn btn-primary desktop-primary" href="index.html?newJob=1">Lägg upp jobb</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="jobs-hero">
+    <div class="wrap jobs-hero-grid">
+      <div>
+        <span class="eyebrow">Jobb nära dig</span>
+        <h1>Hitta något du kan hjälpa till med.</h1>
+        <p class="lead">Filtrera bland öppna jobb och anmäl intresse med din utförarprofil.</p>
+      </div>
+      <a class="btn btn-primary" href="index.html?newJob=1">Jag behöver hjälp</a>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap jobs-layout">
+      <aside class="filters" id="jobFilters" aria-label="Filtrera jobb">
+        <div class="filter-actions">
+          <h2>Filtrera</h2>
+          <button class="link-button" type="button" onclick="resetJobFilters()">Rensa</button>
+        </div>
+        <div class="field">
+          <label for="filterSearch">Sök</label>
+          <input id="filterSearch" type="search" placeholder="Exempel: flytt eller målning" />
+        </div>
+        <div class="field">
+          <label for="filterCategory">Kategori</label>
+          <select id="filterCategory">
+            <option value="">Alla kategorier</option>
+            <option>Flytt & bärhjälp</option>
+            <option>Trädgård</option>
+            <option>Montering & småfix</option>
+            <option>Målning</option>
+            <option>Rengöring</option>
+            <option>Bortforsling & transport</option>
+            <option>Djurpassning</option>
+            <option>Teknikhjälp</option>
+            <option>Större projekt</option>
+            <option>Övrigt</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filterLocation">Ort eller område</label>
+          <input id="filterLocation" placeholder="Exempel: Täby" />
+        </div>
+        <div class="field">
+          <label for="filterTiming">När?</label>
+          <select id="filterTiming">
+            <option value="">När som helst</option>
+            <option>Idag</option>
+            <option>Imorgon</option>
+            <option>Den här veckan</option>
+            <option>Välj datum senare</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filterMinBudget">Minsta ersättning</label>
+          <input id="filterMinBudget" type="number" min="0" step="100" placeholder="0 kr" />
+        </div>
+      </aside>
+
+      <div>
+        <div class="jobs-toolbar">
+          <div>
+            <div class="jobs-count" id="jobsCount">Hämtar jobb…</div>
+            <div class="account-meta">Endast öppna jobb visas</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn btn-light btn-small mobile-filter-btn" type="button" onclick="toggleJobFilters()">Filter</button>
+            <select id="filterSort" aria-label="Sortera jobb">
+              <option value="newest">Nyast först</option>
+              <option value="highest">Högst ersättning</option>
+              <option value="lowest">Lägst ersättning</option>
+            </select>
+          </div>
+        </div>
+        <div class="job-feed" id="publicJobs" aria-live="polite">
+          <div class="empty-state"><p>Hämtar lediga jobb…</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="callback-section">
+    <div class="wrap">
+      <div class="callback-card">
+        <div class="callback-icon" aria-hidden="true">☎</div>
+        <div>
+          <h2>Behöver du hjälp att lägga ut ett jobb?</h2>
+          <p>Be oss ringa upp så hjälper vi dig hela vägen.</p>
+        </div>
+        <a class="btn btn-primary" href="index.html#personlig-hjalp">Personlig hjälp</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-grid">
+    <div>
+      <div class="logo" style="margin-bottom:10px"><span class="logo-mark">G</span><span>Grannpojkarna</span></div>
+      <div class="tagline">Hjälpen finns runt hörnet.</div>
+    </div>
+    <div>© 2026 Grannpojkarna · Pilot</div>
+    <div><a href="mailto:info@grannpojkarna.se">info@grannpojkarna.se</a></div>
+  </div>
+</footer>
+
+<div class="modal" id="applicationModal">
+  <div class="dialog">
+    <div class="dialog-top">
+      <div>
+        <h3>Anmäl intresse</h3>
+        <p class="auth-intro" id="applicationJobTitle"></p>
+      </div>
+      <button class="close" onclick="closeApplicationModal()" aria-label="Stäng">×</button>
+    </div>
+    <form class="form-grid" id="applicationForm" onsubmit="submitApplication(event)">
+      <div class="field full">
+        <label for="applicationMessage">Meddelande till beställaren</label>
+        <textarea id="applicationMessage" rows="5" maxlength="1000" placeholder="Berätta kort varför du passar för jobbet och när du kan hjälpa till" required></textarea>
+      </div>
+      <div class="field full">
+        <label for="applicationPrice">Ditt pris, valfritt</label>
+        <input id="applicationPrice" inputmode="numeric" placeholder="Exempel: 700 kr" />
+      </div>
+      <div class="field full">
+        <button class="btn btn-primary" style="width:100%" type="submit" id="applicationSubmitBtn">Skicka intresseanmälan</button>
+        <div class="notice hidden" id="applicationNotice" role="status"></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="accountModal">
+  <div class="dialog">
+    <div class="dialog-top">
+      <h3 id="accountTitle">Logga in eller skapa konto</h3>
+      <button class="close" onclick="closeAccountModal()" aria-label="Stäng">×</button>
+    </div>
+
+    <div id="authEmailStep" class="auth-stack">
+      <p class="auth-intro">Ange din mejladress så skickar vi en sexsiffrig engångskod.</p>
+      <div class="field">
+        <label for="authEmail">Mejladress</label>
+        <input id="authEmail" type="email" autocomplete="email" placeholder="du@exempel.se" required />
+      </div>
+      <button class="btn btn-primary" id="sendCodeBtn" onclick="sendLoginCode()">Skicka kod</button>
+      <div class="notice hidden" id="authEmailNotice" role="status"></div>
+    </div>
+
+    <div id="authCodeStep" class="auth-stack hidden">
+      <p class="auth-intro">Vi har skickat en kod till <strong id="codeEmail"></strong>.</p>
+      <div class="field">
+        <label for="authCode">Sexsiffrig kod</label>
+        <input id="authCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required />
+      </div>
+      <button class="btn btn-primary" id="verifyCodeBtn" onclick="verifyLoginCode()">Verifiera och fortsätt</button>
+      <button class="link-button" onclick="showEmailStep()">Använd en annan mejladress</button>
+      <div class="notice hidden" id="authCodeNotice" role="status"></div>
+    </div>
+
+    <div id="profileStep" class="auth-stack hidden">
+      <p class="auth-intro">Skapa ett konto. Du kan både lägga upp och utföra jobb.</p>
+      <div class="field">
+        <label for="profileName">Namn</label>
+        <input id="profileName" autocomplete="name" placeholder="För- och efternamn" required />
+      </div>
+      <div class="field">
+        <label for="profilePhone">Telefonnummer</label>
+        <input id="profilePhone" type="tel" autocomplete="tel" placeholder="070-123 45 67" />
+      </div>
+      <div class="field">
+        <label for="profileAccountType">Kontotyp</label>
+        <select id="profileAccountType">
+          <option value="private">Privatperson</option>
+          <option value="company">Företag</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Hur vill du använda Grannpojkarna?</label>
+        <div class="choice-grid">
+          <div class="choice">
+            <input type="radio" name="profileUse" id="profileUseCustomer" value="customer" />
+            <label for="profileUseCustomer"><strong>Beställa</strong><span>Lägga upp jobb</span></label>
+          </div>
+          <div class="choice">
+            <input type="radio" name="profileUse" id="profileUsePerformer" value="performer" checked />
+            <label for="profileUsePerformer"><strong>Utföra</strong><span>Hitta och söka jobb</span></label>
+          </div>
+          <div class="choice">
+            <input type="radio" name="profileUse" id="profileUseBoth" value="both" />
+            <label for="profileUseBoth"><strong>Båda</strong><span>Beställa och utföra</span></label>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="saveProfileBtn" onclick="saveProfile()">Skapa konto</button>
+      <div class="notice hidden" id="profileNotice" role="status"></div>
+    </div>
+
+    <div id="performerStep" class="auth-stack hidden">
+      <p class="auth-intro">Aktivera din utförarprofil för att kunna anmäla intresse för jobb.</p>
+      <div class="field">
+        <label for="performerArea">Område</label>
+        <input id="performerArea" maxlength="120" placeholder="Exempel: Upplands Väsby med omnejd" />
+      </div>
+      <div class="field">
+        <label for="performerSkills">Vad kan du hjälpa till med?</label>
+        <input id="performerSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" />
+      </div>
+      <div class="field">
+        <label for="performerBio">Kort presentation</label>
+        <textarea id="performerBio" rows="4" maxlength="600" placeholder="Berätta kort om dig och din erfarenhet"></textarea>
+      </div>
+      <button class="btn btn-primary" id="savePerformerBtn" onclick="savePerformerProfile()">Aktivera utförarprofil</button>
+      <button class="btn btn-light" onclick="showAccountStep()">Avbryt</button>
+      <div class="notice hidden" id="performerNotice" role="status"></div>
+    </div>
+
+    <div id="accountStep" class="hidden">
+      <div class="account-head">
+        <div>
+          <h3 id="accountName">Mitt konto</h3>
+          <div class="account-meta" id="accountEmail"></div>
+        </div>
+        <span class="status-pill" id="accountRole">Beställare</span>
+      </div>
+      <div class="account-actions">
+        <a class="btn btn-primary" href="index.html?newJob=1">Lägg upp jobb</a>
+        <a class="btn btn-light hidden" id="findJobsBtn" href="jobb.html">Hitta jobb</a>
+        <button class="btn btn-light" id="enablePerformerBtn" onclick="showPerformerStep()">Aktivera utförarprofil</button>
+        <button class="btn btn-light" onclick="signOut()">Logga ut</button>
+      </div>
+      <div class="job-list" id="myJobs"></div>
+      <div class="notice hidden" id="accountNotice" role="status"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

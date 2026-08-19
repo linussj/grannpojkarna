@@ -12,6 +12,13 @@ let selectedApplicationJobId = null;
 let roleHint = document.body.dataset.page === "jobs" ? "performer" : "customer";
 let publicJobs = [];
 let ownJobs = [];
+let assignedJobs = [];
+let availablePerformers = [];
+let selectedChatJobId = null;
+let selectedChatOtherLabel = "Den andra personen";
+let chatRefreshTimer = null;
+
+const profileFields = "id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek, availability_status, available_until";
 
 const byId = (id) => document.getElementById(id);
 
@@ -33,6 +40,7 @@ function hideAccountSteps() {
   ["authEmailStep", "authCodeStep", "profileStep", "performerStep", "accountStep"].forEach((id) => {
     byId(id)?.classList.add("hidden");
   });
+  byId("accountLogoutBtn")?.classList.add("hidden");
 }
 
 function showEmailStep() {
@@ -77,6 +85,7 @@ function showPerformerStep() {
 async function showAccountStep() {
   hideAccountSteps();
   byId("accountStep")?.classList.remove("hidden");
+  byId("accountLogoutBtn")?.classList.remove("hidden");
   if (byId("accountTitle")) byId("accountTitle").textContent = "Mitt konto";
   if (byId("accountName")) byId("accountName").textContent = currentProfile?.display_name || "Mitt konto";
   if (byId("accountEmail")) byId("accountEmail").textContent = currentUser?.email || "";
@@ -86,6 +95,7 @@ async function showAccountStep() {
   byId("findJobsBtn")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
   byId("enablePerformerBtn")?.classList.toggle("hidden", Boolean(currentProfile?.performer_enabled));
   byId("accountTabEarnings")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
+  byId("availabilityCard")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
   updateProfilePanel();
   showAccountTab("jobs");
   await Promise.all([
@@ -114,6 +124,7 @@ function openAccountModal(preselectedRole = "customer") {
 }
 
 function closeAccountModal() {
+  closeJobChat();
   byId("accountModal")?.classList.remove("show");
 }
 
@@ -173,7 +184,7 @@ async function loadProfile() {
   if (!supabaseClient || !currentUser) return null;
   const { data, error } = await supabaseClient
     .from("profiles")
-    .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek")
+    .select(profileFields)
     .eq("id", currentUser.id)
     .maybeSingle();
   if (error) {
@@ -207,7 +218,7 @@ async function saveProfile() {
       performer_enabled: performerEnabled,
       role: accountType === "company" ? "company" : performerEnabled ? "helper" : "customer"
     })
-    .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek")
+    .select(profileFields)
     .single();
   setLoading("saveProfileBtn", false, "Sparar…", "Skapa konto");
   if (error) {
@@ -240,7 +251,7 @@ async function savePerformerProfile() {
     .from("profiles")
     .update({ performer_enabled: true, service_area: serviceArea, skills, bio: bio || null })
     .eq("id", currentUser.id)
-    .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek")
+    .select(profileFields)
     .single();
   setLoading("savePerformerBtn", false, "Sparar…", "Aktivera utförarprofil");
   if (error) {
@@ -306,6 +317,7 @@ function updateProfilePanel() {
   if (byId("editProfileArea")) byId("editProfileArea").value = currentProfile.service_area || "";
   if (byId("editProfileSkills")) byId("editProfileSkills").value = (currentProfile.skills || []).join(", ");
   byId("performerProfileFields")?.classList.toggle("hidden", !currentProfile.performer_enabled);
+  updateAvailabilityCard();
 
   const fields = [Boolean(currentProfile.display_name), Boolean(currentProfile.bio), Boolean(currentProfile.avatar_path)];
   if (currentProfile.performer_enabled) fields.push(Boolean(currentProfile.service_area), Boolean(currentProfile.skills?.length));
@@ -318,6 +330,59 @@ function updateProfilePanel() {
       ? "Din profil är komplett och redo att visas för beställare."
       : `Din profil är ${percent}% komplett. Lägg gärna till bild och presentation.`;
   }
+}
+
+function activeAvailability(profile = currentProfile) {
+  if (!profile?.performer_enabled || !profile.available_until) return "unavailable";
+  if (new Date(profile.available_until).getTime() <= Date.now()) return "unavailable";
+  return ["now", "today"].includes(profile.availability_status) ? profile.availability_status : "unavailable";
+}
+
+function availabilityLabel(status) {
+  return ({ now: "Kan hjälpa nu", today: "Kan hjälpa idag", unavailable: "Ingen extra synlighet aktiv" })[status] || "Ingen extra synlighet aktiv";
+}
+
+function updateAvailabilityCard() {
+  const card = byId("availabilityCard");
+  if (!card || !currentProfile) return;
+  card.classList.toggle("hidden", !currentProfile.performer_enabled);
+  if (!currentProfile.performer_enabled) return;
+  const status = activeAvailability();
+  if (byId("availabilityStatusText")) byId("availabilityStatusText").textContent = availabilityLabel(status);
+  card.classList.toggle("is-active", status !== "unavailable");
+  card.classList.toggle("is-now", status === "now");
+  byId("clearAvailabilityBtn")?.classList.toggle("hidden", status === "unavailable");
+  if (byId("availabilityExpiry")) {
+    const expiry = status === "unavailable" ? "" : new Date(currentProfile.available_until).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+    byId("availabilityExpiry").textContent = status === "now"
+      ? `Visas högst upp till cirka ${expiry}.`
+      : status === "today"
+        ? "Gäller till midnatt och stängs sedan av automatiskt."
+        : "Slå på statusen när du vill synas för beställare.";
+  }
+}
+
+function setAvailabilityLoading(isLoading) {
+  ["availabilityNowBtn", "availabilityTodayBtn", "clearAvailabilityBtn"].forEach((id) => {
+    if (byId(id)) byId(id).disabled = isLoading;
+  });
+}
+
+async function saveAvailabilityStatus(status) {
+  if (!currentUser || !currentProfile?.performer_enabled) return;
+  if (!["now", "today", "unavailable"].includes(status)) return;
+  setAvailabilityLoading(true);
+  setNotice("accountNotice");
+  const { data, error } = await supabaseClient.rpc("set_my_availability", { p_status: status });
+  setAvailabilityLoading(false);
+  if (error || !data?.length) {
+    setNotice("accountNotice", "Statusen kunde inte sparas. Kontrollera att databasuppdateringen är körd.", "error");
+    return;
+  }
+  currentProfile.availability_status = data[0].availability_status;
+  currentProfile.available_until = data[0].available_until;
+  updateAvailabilityCard();
+  setNotice("accountNotice", status === "unavailable" ? "Du visas inte längre som tillgänglig." : "Din tillgänglighet är uppdaterad.", "success");
 }
 
 async function uploadProfileAvatar(file) {
@@ -362,7 +427,7 @@ async function saveOptionalProfile() {
       .from("profiles")
       .update(updates)
       .eq("id", currentUser.id)
-      .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek")
+      .select(profileFields)
       .single();
     if (error) throw error;
     currentProfile = data;
@@ -467,22 +532,30 @@ async function submitJob(event) {
 async function loadMyJobs() {
   const container = byId("myJobs");
   if (!container || !supabaseClient || !currentUser) return;
-  container.innerHTML = '<div class="account-meta">Hämtar dina publicerade jobb…</div>';
-  const { data, error } = await supabaseClient
-    .from("jobs")
-    .select("id, title, description, location, timing, budget_sek, price_type, category, status, created_at, performer_id, agreed_price_sek, completed_at")
-    .eq("user_id", currentUser.id)
-    .order("created_at", { ascending: false });
-  if (error) {
+  container.innerHTML = '<div class="account-meta">Hämtar dina jobb och uppdrag…</div>';
+  const jobFields = "id, user_id, title, description, location, timing, budget_sek, price_type, category, status, created_at, updated_at, performer_id, agreed_price_sek, accepted_at, started_at, completed_at";
+  const [ownedResult, assignedResult, availabilityResult] = await Promise.all([
+    supabaseClient
+      .from("jobs")
+      .select(jobFields)
+      .eq("user_id", currentUser.id)
+      .order("updated_at", { ascending: false }),
+    currentProfile?.performer_enabled
+      ? supabaseClient
+          .from("jobs")
+          .select(jobFields)
+          .eq("performer_id", currentUser.id)
+          .in("status", ["accepted", "in_progress", "completed"])
+          .order("updated_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    supabaseClient.rpc("get_available_performers")
+  ]);
+  if (ownedResult.error || assignedResult.error) {
     container.innerHTML = '<div class="notice error">Jobben kunde inte hämtas.</div>';
     return;
   }
-  if (!data.length) {
-    ownJobs = [];
-    container.innerHTML = '<div class="notice">Du har inte lagt upp något jobb ännu.</div>';
-    return;
-  }
-  ownJobs = await Promise.all(data.map(async (job) => {
+  const availabilityByPerformer = new Map((availabilityResult.data || []).map((performer) => [performer.id, performer.availability_status]));
+  ownJobs = await Promise.all((ownedResult.data || []).map(async (job) => {
     const { data: applications } = await supabaseClient.rpc("get_job_applications", { p_job_id: job.id });
     let review = null;
     if (job.status === "completed" && job.performer_id) {
@@ -493,9 +566,48 @@ async function loadMyJobs() {
         .maybeSingle();
       review = result.data || null;
     }
-    return { ...job, applications: applications || [], review };
+    const applicationsWithAvailability = (applications || []).map((application) => ({
+      ...application,
+      availability_status: availabilityByPerformer.get(application.performer_id) || null
+    }));
+    return { ...job, applications: applicationsWithAvailability, review };
   }));
-  container.innerHTML = ownJobs.map((job) => `
+  assignedJobs = assignedResult.data || [];
+
+  const assignedSection = currentProfile?.performer_enabled
+    ? `<section class="account-job-group">
+        <div class="account-job-group-head">
+          <div><h4>Jobb jag utför</h4><span>Accepterade, pågående och slutförda uppdrag</span></div>
+          <span class="status-pill">${assignedJobs.length}</span>
+        </div>
+        ${assignedJobs.length
+          ? assignedJobs.map((job) => renderAccountJob(job, "performer")).join("")
+          : '<div class="notice">Du har inget accepterat eller pågående uppdrag ännu.</div>'}
+      </section>`
+    : "";
+  const ownedSection = `<section class="account-job-group">
+      <div class="account-job-group-head">
+        <div><h4>Jobb jag lagt upp</h4><span>Dina förfrågningar och valda utförare</span></div>
+        <span class="status-pill">${ownJobs.length}</span>
+      </div>
+      ${ownJobs.length
+        ? ownJobs.map((job) => renderAccountJob(job, "owner")).join("")
+        : '<div class="notice">Du har inte lagt upp något jobb ännu.</div>'}
+    </section>`;
+  container.innerHTML = `${assignedSection}${ownedSection}`;
+}
+
+function renderAccountJob(job, relationship) {
+  const isOwner = relationship === "owner";
+  const canChat = ["accepted", "in_progress", "completed"].includes(job.status);
+  const statusHelp = ({
+    open: "Väntar på intresseanmälningar",
+    accepted: "Utföraren är vald – använd chatten för att planera jobbet",
+    in_progress: "Jobbet har startats och pågår",
+    completed: "Beställaren har bekräftat att jobbet är klart",
+    cancelled: "Jobbet är avslutat utan utförande"
+  })[job.status] || "";
+  return `
     <article class="job-row">
       <div class="job-row-top">
         <div>
@@ -505,30 +617,45 @@ async function loadMyJobs() {
         <span class="status-pill">${statusLabel(job.status)}</span>
       </div>
       <p>${escapeHtml(job.description)}</p>
+      ${renderJobProgress(job.status)}
+      ${statusHelp ? `<div class="job-status-help">${escapeHtml(statusHelp)}</div>` : ""}
       <div class="job-row-footer">
         <strong>${job.agreed_price_sek ? `${formatCurrency(job.agreed_price_sek)} överenskommet` : formatPrice(job)}</strong>
         <div class="account-actions">
-          ${job.status === "matched" ? `<button class="btn btn-primary btn-small" id="completeJobBtn-${job.id}" type="button" onclick="markJobCompleted(${job.id})">Markera som klart</button>` : ""}
-          <button class="btn btn-danger btn-small" id="deleteJobBtn-${job.id}" type="button" onclick="deleteJob(${job.id})">Ta bort jobb</button>
+          ${canChat ? `<button class="btn btn-light btn-small" type="button" onclick="openJobChat(${job.id})">Öppna chatt</button>` : ""}
+          ${job.status === "accepted" ? `<button class="btn btn-primary btn-small" id="startJobBtn-${job.id}" type="button" onclick="startJob(${job.id})">Markera som pågående</button>` : ""}
+          ${isOwner && job.status === "in_progress" ? `<button class="btn btn-primary btn-small" id="completeJobBtn-${job.id}" type="button" onclick="markJobCompleted(${job.id})">Bekräfta som klart</button>` : ""}
+          ${isOwner && ["open", "cancelled"].includes(job.status) ? `<button class="btn btn-danger btn-small" id="deleteJobBtn-${job.id}" type="button" onclick="deleteJob(${job.id})">Ta bort jobb</button>` : ""}
         </div>
       </div>
-      ${renderJobApplications(job)}
-      ${renderReviewBox(job)}
+      ${isOwner ? renderJobApplications(job) : ""}
+      ${isOwner ? renderReviewBox(job) : ""}
     </article>
-  `).join("");
+  `;
+}
+
+function renderJobProgress(status) {
+  const order = ["accepted", "in_progress", "completed"];
+  const currentIndex = order.indexOf(status);
+  if (currentIndex < 0) return "";
+  return `<div class="job-progress" aria-label="Jobbets status">
+    ${order.map((step, index) => `<div class="job-progress-step ${index <= currentIndex ? "is-done" : ""} ${index === currentIndex ? "is-current" : ""}">
+      <span>${index + 1}</span><strong>${statusLabel(step)}</strong>
+    </div>`).join("")}
+  </div>`;
 }
 
 function renderJobApplications(job) {
-  if (!["open", "matched"].includes(job.status)) return "";
+  if (!["open", "accepted", "in_progress"].includes(job.status)) return "";
   if (!job.applications.length) {
     return '<div class="job-applications"><h5>Intresseanmälningar</h5><div class="account-meta">Ingen har anmält intresse ännu.</div></div>';
   }
-  const visibleApplications = job.status === "matched"
+  const visibleApplications = job.status !== "open"
     ? job.applications.filter((application) => application.status === "accepted")
     : job.applications;
   return `
     <div class="job-applications">
-      <h5>${job.status === "matched" ? "Vald utförare" : `Intresseanmälningar (${job.applications.length})`}</h5>
+      <h5>${job.status !== "open" ? "Vald utförare" : `Intresseanmälningar (${job.applications.length})`}</h5>
       ${visibleApplications.map((application) => {
         const proposedPrice = application.proposed_price_sek
           ? formatCurrency(application.proposed_price_sek)
@@ -540,6 +667,7 @@ function renderJobApplications(job) {
             <div class="application-avatar">${application.avatar_path ? `<img src="${escapeHtml(avatarUrl(application.avatar_path))}" alt="" />` : escapeHtml(initials(application.display_name))}</div>
             <div>
               <h6>${escapeHtml(application.display_name || "Utförare")}</h6>
+              ${application.availability_status ? `<span class="availability-badge"><span aria-hidden="true"></span>${availabilityLabel(application.availability_status)}</span>` : ""}
               <div class="rating-line">${ratingCount ? `${rating.toFixed(1).replace(".", ",")} ★ · ${ratingCount} ${ratingCount === 1 ? "betyg" : "betyg"}` : "Ny utförare · inga betyg ännu"}</div>
               ${application.bio ? `<p>${escapeHtml(application.bio)}</p>` : ""}
               <div class="account-meta">${escapeHtml(application.service_area || "Område saknas")} · ${escapeHtml(proposedPrice)}</div>
@@ -598,16 +726,29 @@ async function acceptApplication(applicationId, jobId) {
     setNotice("accountNotice", "Utföraren kunde inte väljas. Försök igen.", "error");
     return;
   }
-  setNotice("accountNotice", "Utföraren är vald och jobbet är nu matchat.", "success");
+  setNotice("accountNotice", "Utföraren är vald. Jobbet är accepterat och chatten är nu öppen.", "success");
+  await loadMyJobs();
+}
+
+async function startJob(jobId) {
+  if (!window.confirm("Vill du markera jobbet som pågående?")) return;
+  setLoading(`startJobBtn-${jobId}`, true, "Sparar…", "Markera som pågående");
+  const { error } = await supabaseClient.rpc("start_job", { p_job_id: jobId });
+  if (error) {
+    setLoading(`startJobBtn-${jobId}`, false, "Sparar…", "Markera som pågående");
+    setNotice("accountNotice", "Jobbet kunde inte startas. Försök igen.", "error");
+    return;
+  }
+  setNotice("accountNotice", "Jobbet är nu markerat som pågående.", "success");
   await loadMyJobs();
 }
 
 async function markJobCompleted(jobId) {
-  if (!window.confirm("Är jobbet utfört och klart? Därefter kan du lämna ett betyg.")) return;
-  setLoading(`completeJobBtn-${jobId}`, true, "Sparar…", "Markera som klart");
+  if (!window.confirm("Bekräftar du som beställare att jobbet är utfört och klart? Därefter kan du lämna ett betyg.")) return;
+  setLoading(`completeJobBtn-${jobId}`, true, "Sparar…", "Bekräfta som klart");
   const { error } = await supabaseClient.rpc("complete_job", { p_job_id: jobId });
   if (error) {
-    setLoading(`completeJobBtn-${jobId}`, false, "Sparar…", "Markera som klart");
+    setLoading(`completeJobBtn-${jobId}`, false, "Sparar…", "Bekräfta som klart");
     setNotice("accountNotice", "Jobbet kunde inte markeras som klart.", "error");
     return;
   }
@@ -657,6 +798,86 @@ async function deleteJob(jobId) {
   if (byId("publicJobs")) applyJobFilters();
   await loadMyJobs();
   setNotice("accountNotice", "Jobbet har tagits bort.", "success");
+}
+
+function findAccountJob(jobId) {
+  return [...ownJobs, ...assignedJobs].find((job) => Number(job.id) === Number(jobId));
+}
+
+async function openJobChat(jobId) {
+  const job = findAccountJob(jobId);
+  if (!job || !["accepted", "in_progress", "completed"].includes(job.status)) return;
+  selectedChatJobId = Number(jobId);
+  selectedChatOtherLabel = job.user_id === currentUser.id ? "Utföraren" : "Beställaren";
+  if (byId("jobChatTitle")) byId("jobChatTitle").textContent = job.title || job.category || "Jobb";
+  byId("jobChatForm")?.classList.toggle("hidden", job.status === "completed");
+  setNotice("jobChatNotice", job.status === "completed" ? "Jobbet är avslutat. Chatten är sparad men stängd för nya meddelanden." : "");
+  byId("jobChatModal")?.classList.add("show");
+  await loadJobMessages();
+  if (chatRefreshTimer) window.clearInterval(chatRefreshTimer);
+  chatRefreshTimer = window.setInterval(loadJobMessages, 5000);
+  if (job.status !== "completed") setTimeout(() => byId("jobChatInput")?.focus(), 80);
+}
+
+function closeJobChat() {
+  if (chatRefreshTimer) window.clearInterval(chatRefreshTimer);
+  chatRefreshTimer = null;
+  selectedChatJobId = null;
+  selectedChatOtherLabel = "Den andra personen";
+  byId("jobChatModal")?.classList.remove("show");
+  if (byId("jobChatMessages")) byId("jobChatMessages").innerHTML = "";
+  if (byId("jobChatInput")) byId("jobChatInput").value = "";
+  setNotice("jobChatNotice");
+}
+
+async function loadJobMessages() {
+  const container = byId("jobChatMessages");
+  if (!container || !selectedChatJobId || !currentUser) return;
+  if (!container.children.length) container.innerHTML = '<div class="account-meta">Hämtar meddelanden…</div>';
+  const { data, error } = await supabaseClient
+    .from("job_messages")
+    .select("id, sender_id, body, created_at")
+    .eq("job_id", selectedChatJobId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    container.innerHTML = '<div class="notice error">Chatten kunde inte hämtas.</div>';
+    return;
+  }
+  const messages = data || [];
+  container.innerHTML = messages.length
+    ? messages.map((message) => {
+        const isOwn = message.sender_id === currentUser.id;
+        const timestamp = new Date(message.created_at).toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        return `<div class="chat-message ${isOwn ? "is-own" : "is-other"}">
+          <div>${escapeHtml(message.body)}</div>
+          <span>${isOwn ? "Du" : selectedChatOtherLabel} · ${escapeHtml(timestamp)}</span>
+        </div>`;
+      }).join("")
+    : '<div class="chat-empty"><strong>Starta planeringen här</strong><span>Bestäm tid, plats och praktiska detaljer om jobbet.</span></div>';
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendJobMessage(event) {
+  event.preventDefault();
+  if (!selectedChatJobId || !currentUser) return;
+  const input = byId("jobChatInput");
+  const body = input?.value.trim() || "";
+  if (!body) return;
+  setLoading("jobChatSendBtn", true, "Skickar…", "Skicka");
+  setNotice("jobChatNotice");
+  const { error } = await supabaseClient.from("job_messages").insert({
+    job_id: selectedChatJobId,
+    sender_id: currentUser.id,
+    body
+  });
+  setLoading("jobChatSendBtn", false, "Skickar…", "Skicka");
+  if (error) {
+    setNotice("jobChatNotice", "Meddelandet kunde inte skickas.", "error");
+    return;
+  }
+  input.value = "";
+  await loadJobMessages();
+  input.focus();
 }
 
 async function loadEarnings() {
@@ -876,6 +1097,79 @@ function toggleJobFilters() {
   byId("jobFilters")?.classList.toggle("show");
 }
 
+async function loadAvailablePerformers() {
+  const container = byId("availablePerformers");
+  if (!container) return;
+  if (!supabaseClient) {
+    container.innerHTML = '<div class="notice error">Utförarlistan är inte ansluten ännu.</div>';
+    return;
+  }
+  const { data, error } = await supabaseClient.rpc("get_available_performers");
+  if (error) {
+    if (byId("availabilitySection")) return;
+    if (byId("performersCount")) byId("performersCount").textContent = "Listan kunde inte laddas";
+    container.innerHTML = '<div class="notice error">Utförarna kunde inte hämtas. Databasuppdateringen kan saknas.</div>';
+    return;
+  }
+  availablePerformers = data || [];
+  byId("availabilitySection")?.classList.toggle("hidden", !availablePerformers.length);
+  applyPerformerFilters();
+}
+
+function applyPerformerFilters() {
+  if (!byId("availablePerformers")) return;
+  const search = (byId("performerSearchFilter")?.value || "").trim().toLowerCase();
+  const area = (byId("performerAreaFilter")?.value || "").trim().toLowerCase();
+  const filtered = availablePerformers.filter((performer) => {
+    const searchable = `${performer.display_name || ""} ${performer.bio || ""} ${(performer.skills || []).join(" ")}`.toLowerCase();
+    return (!search || searchable.includes(search))
+      && (!area || String(performer.service_area || "").toLowerCase().includes(area));
+  });
+  renderAvailablePerformers(filtered);
+}
+
+function renderAvailablePerformers(performers) {
+  const container = byId("availablePerformers");
+  if (!container) return;
+  if (byId("performersCount")) {
+    byId("performersCount").textContent = `${performers.length} ${performers.length === 1 ? "utförare är tillgänglig" : "utförare är tillgängliga"}`;
+  }
+  if (!performers.length) {
+    container.innerHTML = `
+      <div class="empty-state performer-empty">
+        <h2>Ingen matchar sökningen just nu</h2>
+        <p>Prova ett annat område eller kom tillbaka senare. Du kan också lägga upp jobbet så att utförare kan anmäla intresse.</p>
+        <a class="btn btn-primary" href="index.html?newJob=1">Lägg upp ett jobb</a>
+      </div>`;
+    return;
+  }
+  const limit = Number(container.dataset.performerLimit || 0);
+  const visiblePerformers = limit ? performers.slice(0, limit) : performers;
+  container.innerHTML = visiblePerformers.map((performer) => {
+    const rating = Number(performer.average_rating || 0);
+    const reviewCount = Number(performer.review_count || 0);
+    const skills = (performer.skills || []).slice(0, 5);
+    return `
+      <article class="performer-card ${performer.availability_status === "now" ? "is-now" : ""}">
+        <div class="performer-card-head">
+          <div class="performer-avatar">${performer.avatar_path ? `<img src="${escapeHtml(avatarUrl(performer.avatar_path))}" alt="" />` : escapeHtml(initials(performer.display_name))}</div>
+          <div>
+            <span class="availability-badge"><span aria-hidden="true"></span>${availabilityLabel(performer.availability_status)}</span>
+            <h2>${escapeHtml(performer.display_name || "Utförare")}</h2>
+            <div class="rating-line">${reviewCount ? `${rating.toFixed(1).replace(".", ",")} ★ · ${reviewCount} betyg` : "Ny utförare · inga betyg ännu"}</div>
+          </div>
+        </div>
+        ${performer.bio ? `<p>${escapeHtml(performer.bio)}</p>` : '<p class="account-meta">Ingen presentation ännu.</p>'}
+        <div class="performer-details">
+          <span>📍 ${escapeHtml(performer.service_area || "Område ej angivet")}</span>
+          <span>✓ ${Number(performer.completed_jobs || 0)} utförda jobb</span>
+        </div>
+        ${skills.length ? `<div class="skill-list">${skills.map((skill) => `<span>${escapeHtml(skill)}</span>`).join("")}</div>` : ""}
+        <a class="btn btn-primary" href="index.html?newJob=1">Lägg upp jobb</a>
+      </article>`;
+  }).join("");
+}
+
 function beginApplication(jobId) {
   const job = publicJobs.find((item) => Number(item.id) === Number(jobId));
   if (!job || currentUser?.id === job.user_id) return;
@@ -954,7 +1248,7 @@ function formatRelativeDate(value) {
 }
 
 function statusLabel(status) {
-  return ({ open: "Öppet", matched: "Matchat", completed: "Klart", cancelled: "Avbrutet" })[status] || escapeHtml(status);
+  return ({ open: "Öppet", matched: "Accepterat", accepted: "Accepterat", in_progress: "Pågående", completed: "Klart", cancelled: "Avbrutet" })[status] || escapeHtml(status);
 }
 
 function escapeHtml(value) {
@@ -967,10 +1261,12 @@ function escapeHtml(value) {
 }
 
 async function signOut() {
+  closeJobChat();
   if (supabaseClient) await supabaseClient.auth.signOut();
   currentUser = null;
   currentProfile = null;
   ownJobs = [];
+  assignedJobs = [];
   updateAccountButton();
   closeAccountModal();
   if (byId("publicJobs")) renderPublicJobs(publicJobs);
@@ -991,6 +1287,7 @@ async function initializeAuth() {
     });
   }
   if (byId("publicJobs")) await loadPublicJobs();
+  if (byId("availablePerformers")) await loadAvailablePerformers();
   const params = new URLSearchParams(window.location.search);
   if (params.get("newJob") === "1") {
     pendingJob = true;
@@ -1003,6 +1300,7 @@ function attachPageEvents() {
   byId("accountModal")?.addEventListener("click", function (event) { if (event.target === this) closeAccountModal(); });
   byId("callbackModal")?.addEventListener("click", function (event) { if (event.target === this) closeCallbackModal(); });
   byId("applicationModal")?.addEventListener("click", function (event) { if (event.target === this) closeApplicationModal(); });
+  byId("jobChatModal")?.addEventListener("click", function (event) { if (event.target === this) closeJobChat(); });
   byId("authEmail")?.addEventListener("keydown", (event) => { if (event.key === "Enter") sendLoginCode(); });
   byId("authCode")?.addEventListener("keydown", (event) => { if (event.key === "Enter") verifyLoginCode(); });
   byId("profileAvatarInput")?.addEventListener("change", (event) => {
@@ -1021,6 +1319,9 @@ function attachPageEvents() {
     if (!element) return;
     const eventName = ["filterSearch", "filterLocation", "filterMinBudget"].includes(id) ? "input" : "change";
     element.addEventListener(eventName, applyJobFilters);
+  });
+  ["performerSearchFilter", "performerAreaFilter"].forEach((id) => {
+    byId(id)?.addEventListener("input", applyPerformerFilters);
   });
 }
 

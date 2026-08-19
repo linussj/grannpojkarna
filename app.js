@@ -11,6 +11,7 @@ let pendingApplicationJobId = null;
 let selectedApplicationJobId = null;
 let roleHint = document.body.dataset.page === "jobs" ? "performer" : "customer";
 let publicJobs = [];
+let ownJobs = [];
 
 const byId = (id) => document.getElementById(id);
 
@@ -84,7 +85,13 @@ async function showAccountStep() {
   if (byId("accountRole")) byId("accountRole").textContent = `${accountType} · ${capability}`;
   byId("findJobsBtn")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
   byId("enablePerformerBtn")?.classList.toggle("hidden", Boolean(currentProfile?.performer_enabled));
-  await loadMyJobs();
+  byId("accountTabEarnings")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
+  updateProfilePanel();
+  showAccountTab("jobs");
+  await Promise.all([
+    loadMyJobs(),
+    currentProfile?.performer_enabled ? loadEarnings() : Promise.resolve()
+  ]);
 }
 
 function openAccountModal(preselectedRole = "customer") {
@@ -166,7 +173,7 @@ async function loadProfile() {
   if (!supabaseClient || !currentUser) return null;
   const { data, error } = await supabaseClient
     .from("profiles")
-    .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role")
+    .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek")
     .eq("id", currentUser.id)
     .maybeSingle();
   if (error) {
@@ -200,7 +207,7 @@ async function saveProfile() {
       performer_enabled: performerEnabled,
       role: accountType === "company" ? "company" : performerEnabled ? "helper" : "customer"
     })
-    .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role")
+    .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek")
     .single();
   setLoading("saveProfileBtn", false, "Sparar…", "Skapa konto");
   if (error) {
@@ -233,7 +240,7 @@ async function savePerformerProfile() {
     .from("profiles")
     .update({ performer_enabled: true, service_area: serviceArea, skills, bio: bio || null })
     .eq("id", currentUser.id)
-    .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role")
+    .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek")
     .single();
   setLoading("savePerformerBtn", false, "Sparar…", "Aktivera utförarprofil");
   if (error) {
@@ -248,6 +255,132 @@ async function savePerformerProfile() {
 
 function updateAccountButton() {
   if (byId("accountBtn")) byId("accountBtn").textContent = currentUser ? "Mitt konto" : "Logga in";
+}
+
+function showAccountTab(tabName) {
+  const requestedTab = tabName === "earnings" && !currentProfile?.performer_enabled ? "jobs" : tabName;
+  const tabs = {
+    jobs: ["accountTabJobs", "accountJobsPanel"],
+    profile: ["accountTabProfile", "accountProfilePanel"],
+    earnings: ["accountTabEarnings", "accountEarningsPanel"]
+  };
+  Object.entries(tabs).forEach(([name, [buttonId, panelId]]) => {
+    const isActive = name === requestedTab;
+    byId(buttonId)?.classList.toggle("active", isActive);
+    byId(buttonId)?.setAttribute("aria-selected", String(isActive));
+    byId(panelId)?.classList.toggle("hidden", !isActive);
+  });
+}
+
+function initials(name) {
+  return String(name || "G")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] || "")
+    .join("")
+    .toUpperCase() || "G";
+}
+
+function avatarUrl(path) {
+  if (!path || !supabaseClient) return "";
+  const { data } = supabaseClient.storage.from("profile-images").getPublicUrl(path);
+  return data?.publicUrl || "";
+}
+
+function renderAvatar(elementId, path, name) {
+  const element = byId(elementId);
+  if (!element) return;
+  const url = avatarUrl(path);
+  element.innerHTML = url
+    ? `<img src="${escapeHtml(url)}" alt="" />`
+    : escapeHtml(initials(name));
+}
+
+function updateProfilePanel() {
+  if (!currentProfile) return;
+  renderAvatar("accountAvatar", currentProfile.avatar_path, currentProfile.display_name);
+  renderAvatar("profileAvatarPreview", currentProfile.avatar_path, currentProfile.display_name);
+  if (byId("editProfileName")) byId("editProfileName").value = currentProfile.display_name || "";
+  if (byId("editProfileBio")) byId("editProfileBio").value = currentProfile.bio || "";
+  if (byId("editProfileArea")) byId("editProfileArea").value = currentProfile.service_area || "";
+  if (byId("editProfileSkills")) byId("editProfileSkills").value = (currentProfile.skills || []).join(", ");
+  byId("performerProfileFields")?.classList.toggle("hidden", !currentProfile.performer_enabled);
+
+  const fields = [Boolean(currentProfile.display_name), Boolean(currentProfile.bio), Boolean(currentProfile.avatar_path)];
+  if (currentProfile.performer_enabled) fields.push(Boolean(currentProfile.service_area), Boolean(currentProfile.skills?.length));
+  const completed = fields.filter(Boolean).length;
+  const percent = Math.round((completed / fields.length) * 100);
+  if (byId("profileProgressBar")) byId("profileProgressBar").style.width = `${percent}%`;
+  if (byId("profileProgressText")) byId("profileProgressText").textContent = `Profilen är ${percent}% komplett. Alla uppgifter utom namn är frivilliga.`;
+  if (byId("profilePromptText")) {
+    byId("profilePromptText").textContent = percent === 100
+      ? "Din profil är komplett och redo att visas för beställare."
+      : `Din profil är ${percent}% komplett. Lägg gärna till bild och presentation.`;
+  }
+}
+
+async function uploadProfileAvatar(file) {
+  if (!file) return currentProfile?.avatar_path || null;
+  const allowedTypes = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+  const extension = allowedTypes[file.type];
+  if (!extension || file.size > 5 * 1024 * 1024) throw new Error("invalid-avatar");
+  const path = `${currentUser.id}/${Date.now()}.${extension}`;
+  const { error } = await supabaseClient.storage
+    .from("profile-images")
+    .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+  if (error) throw error;
+  return path;
+}
+
+async function saveOptionalProfile() {
+  if (!currentUser || !currentProfile) return;
+  const displayName = byId("editProfileName")?.value.trim() || "";
+  const bio = byId("editProfileBio")?.value.trim() || "";
+  const serviceArea = byId("editProfileArea")?.value.trim() || "";
+  const skills = (byId("editProfileSkills")?.value || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  const file = byId("profileAvatarInput")?.files?.[0] || null;
+  if (displayName.length < 2) {
+    setNotice("accountNotice", "Ange ett namn med minst två tecken.", "error");
+    return;
+  }
+  setLoading("saveOptionalProfileBtn", true, "Sparar…", "Spara profil");
+  setNotice("accountNotice");
+  try {
+    const previousAvatarPath = currentProfile.avatar_path;
+    const avatarPath = await uploadProfileAvatar(file);
+    const updates = { display_name: displayName, bio: bio || null, avatar_path: avatarPath };
+    if (currentProfile.performer_enabled) {
+      updates.service_area = serviceArea || null;
+      updates.skills = skills;
+    }
+    const { data, error } = await supabaseClient
+      .from("profiles")
+      .update(updates)
+      .eq("id", currentUser.id)
+      .select("id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek")
+      .single();
+    if (error) throw error;
+    currentProfile = data;
+    if (file && previousAvatarPath && previousAvatarPath !== avatarPath) {
+      await supabaseClient.storage.from("profile-images").remove([previousAvatarPath]);
+    }
+    if (byId("profileAvatarInput")) byId("profileAvatarInput").value = "";
+    if (byId("accountName")) byId("accountName").textContent = currentProfile.display_name;
+    updateProfilePanel();
+    setNotice("accountNotice", "Profilen har sparats.", "success");
+  } catch (error) {
+    const message = error?.message === "invalid-avatar"
+      ? "Välj en JPG-, PNG- eller WebP-bild som är mindre än 5 MB."
+      : "Profilen kunde inte sparas. Försök igen.";
+    setNotice("accountNotice", message, "error");
+  } finally {
+    setLoading("saveOptionalProfileBtn", false, "Sparar…", "Spara profil");
+  }
 }
 
 function openModal(type) {
@@ -337,7 +470,7 @@ async function loadMyJobs() {
   container.innerHTML = '<div class="account-meta">Hämtar dina publicerade jobb…</div>';
   const { data, error } = await supabaseClient
     .from("jobs")
-    .select("id, title, description, location, timing, budget_sek, price_type, category, status, created_at")
+    .select("id, title, description, location, timing, budget_sek, price_type, category, status, created_at, performer_id, agreed_price_sek, completed_at")
     .eq("user_id", currentUser.id)
     .order("created_at", { ascending: false });
   if (error) {
@@ -345,10 +478,24 @@ async function loadMyJobs() {
     return;
   }
   if (!data.length) {
+    ownJobs = [];
     container.innerHTML = '<div class="notice">Du har inte lagt upp något jobb ännu.</div>';
     return;
   }
-  container.innerHTML = data.map((job) => `
+  ownJobs = await Promise.all(data.map(async (job) => {
+    const { data: applications } = await supabaseClient.rpc("get_job_applications", { p_job_id: job.id });
+    let review = null;
+    if (job.status === "completed" && job.performer_id) {
+      const result = await supabaseClient
+        .from("reviews")
+        .select("id, rating, comment")
+        .eq("job_id", job.id)
+        .maybeSingle();
+      review = result.data || null;
+    }
+    return { ...job, applications: applications || [], review };
+  }));
+  container.innerHTML = ownJobs.map((job) => `
     <article class="job-row">
       <div class="job-row-top">
         <div>
@@ -358,9 +505,232 @@ async function loadMyJobs() {
         <span class="status-pill">${statusLabel(job.status)}</span>
       </div>
       <p>${escapeHtml(job.description)}</p>
-      <strong>${formatPrice(job)}</strong>
+      <div class="job-row-footer">
+        <strong>${job.agreed_price_sek ? `${formatCurrency(job.agreed_price_sek)} överenskommet` : formatPrice(job)}</strong>
+        <div class="account-actions">
+          ${job.status === "matched" ? `<button class="btn btn-primary btn-small" id="completeJobBtn-${job.id}" type="button" onclick="markJobCompleted(${job.id})">Markera som klart</button>` : ""}
+          <button class="btn btn-danger btn-small" id="deleteJobBtn-${job.id}" type="button" onclick="deleteJob(${job.id})">Ta bort jobb</button>
+        </div>
+      </div>
+      ${renderJobApplications(job)}
+      ${renderReviewBox(job)}
     </article>
   `).join("");
+}
+
+function renderJobApplications(job) {
+  if (!["open", "matched"].includes(job.status)) return "";
+  if (!job.applications.length) {
+    return '<div class="job-applications"><h5>Intresseanmälningar</h5><div class="account-meta">Ingen har anmält intresse ännu.</div></div>';
+  }
+  const visibleApplications = job.status === "matched"
+    ? job.applications.filter((application) => application.status === "accepted")
+    : job.applications;
+  return `
+    <div class="job-applications">
+      <h5>${job.status === "matched" ? "Vald utförare" : `Intresseanmälningar (${job.applications.length})`}</h5>
+      ${visibleApplications.map((application) => {
+        const proposedPrice = application.proposed_price_sek
+          ? formatCurrency(application.proposed_price_sek)
+          : "Inget prisförslag";
+        const rating = Number(application.average_rating || 0);
+        const ratingCount = Number(application.review_count || 0);
+        return `
+          <div class="application-card">
+            <div class="application-avatar">${application.avatar_path ? `<img src="${escapeHtml(avatarUrl(application.avatar_path))}" alt="" />` : escapeHtml(initials(application.display_name))}</div>
+            <div>
+              <h6>${escapeHtml(application.display_name || "Utförare")}</h6>
+              <div class="rating-line">${ratingCount ? `${rating.toFixed(1).replace(".", ",")} ★ · ${ratingCount} ${ratingCount === 1 ? "betyg" : "betyg"}` : "Ny utförare · inga betyg ännu"}</div>
+              ${application.bio ? `<p>${escapeHtml(application.bio)}</p>` : ""}
+              <div class="account-meta">${escapeHtml(application.service_area || "Område saknas")} · ${escapeHtml(proposedPrice)}</div>
+              <p>${escapeHtml(application.message)}</p>
+            </div>
+            <div class="application-actions">
+              ${job.status === "open" && application.status === "pending" ? `<button class="btn btn-primary btn-small" type="button" onclick="acceptApplication(${application.application_id}, ${job.id})">Välj utförare</button>` : `<span class="status-pill">${application.status === "accepted" ? "Vald" : "Ej vald"}</span>`}
+            </div>
+          </div>`;
+      }).join("")}
+    </div>`;
+}
+
+function renderReviewBox(job) {
+  if (job.status !== "completed" || !job.performer_id) return "";
+  if (job.review) {
+    return `<div class="review-box"><strong>Ditt betyg: ${"★".repeat(job.review.rating)}${"☆".repeat(5 - job.review.rating)}</strong>${job.review.comment ? `<span>${escapeHtml(job.review.comment)}</span>` : ""}</div>`;
+  }
+  return `
+    <div class="review-box">
+      <strong>Hur gick jobbet?</strong>
+      <span class="account-meta">Betyget visas på utförarens profil.</span>
+      <div class="review-controls">
+        <div class="field">
+          <label for="reviewRating-${job.id}">Betyg</label>
+          <select id="reviewRating-${job.id}">
+            <option value="5">5 – Utmärkt</option><option value="4">4 – Mycket bra</option><option value="3">3 – Bra</option><option value="2">2 – Mindre bra</option><option value="1">1 – Dåligt</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="reviewComment-${job.id}">Kommentar <span class="optional-label">Frivilligt</span></label>
+          <input id="reviewComment-${job.id}" maxlength="600" placeholder="Skriv några ord om upplevelsen" />
+        </div>
+        <button class="btn btn-primary btn-small" id="reviewBtn-${job.id}" type="button" onclick="submitReview(${job.id})">Lämna betyg</button>
+      </div>
+    </div>`;
+}
+
+async function acceptApplication(applicationId, jobId) {
+  const job = ownJobs.find((item) => Number(item.id) === Number(jobId));
+  const application = job?.applications.find((item) => Number(item.application_id) === Number(applicationId));
+  if (!job || !application) return;
+  const suggestedPrice = application.proposed_price_sek || job.budget_sek;
+  const enteredPrice = window.prompt("Bekräfta överenskommet pris i kronor:", suggestedPrice);
+  if (enteredPrice === null) return;
+  const agreedPrice = parseBudget(enteredPrice);
+  if (!agreedPrice) {
+    setNotice("accountNotice", "Ange ett giltigt överenskommet pris.", "error");
+    return;
+  }
+  const { error } = await supabaseClient.rpc("accept_job_application", {
+    p_application_id: applicationId,
+    p_agreed_price_sek: agreedPrice
+  });
+  if (error) {
+    setNotice("accountNotice", "Utföraren kunde inte väljas. Försök igen.", "error");
+    return;
+  }
+  setNotice("accountNotice", "Utföraren är vald och jobbet är nu matchat.", "success");
+  await loadMyJobs();
+}
+
+async function markJobCompleted(jobId) {
+  if (!window.confirm("Är jobbet utfört och klart? Därefter kan du lämna ett betyg.")) return;
+  setLoading(`completeJobBtn-${jobId}`, true, "Sparar…", "Markera som klart");
+  const { error } = await supabaseClient.rpc("complete_job", { p_job_id: jobId });
+  if (error) {
+    setLoading(`completeJobBtn-${jobId}`, false, "Sparar…", "Markera som klart");
+    setNotice("accountNotice", "Jobbet kunde inte markeras som klart.", "error");
+    return;
+  }
+  setNotice("accountNotice", "Jobbet är markerat som klart. Nu kan du lämna ett betyg.", "success");
+  await loadMyJobs();
+}
+
+async function submitReview(jobId) {
+  const job = ownJobs.find((item) => Number(item.id) === Number(jobId));
+  if (!job?.performer_id) return;
+  const rating = Number(byId(`reviewRating-${jobId}`)?.value || 0);
+  const comment = byId(`reviewComment-${jobId}`)?.value.trim() || "";
+  setLoading(`reviewBtn-${jobId}`, true, "Skickar…", "Lämna betyg");
+  const { error } = await supabaseClient.from("reviews").insert({
+    job_id: jobId,
+    reviewer_id: currentUser.id,
+    reviewee_id: job.performer_id,
+    rating,
+    comment: comment || null
+  });
+  if (error) {
+    setLoading(`reviewBtn-${jobId}`, false, "Skickar…", "Lämna betyg");
+    setNotice("accountNotice", "Betyget kunde inte sparas.", "error");
+    return;
+  }
+  setNotice("accountNotice", "Tack! Betyget har sparats.", "success");
+  await loadMyJobs();
+}
+
+async function deleteJob(jobId) {
+  if (!supabaseClient || !currentUser) return;
+  const confirmed = window.confirm("Vill du verkligen ta bort jobbet? Det går inte att ångra.");
+  if (!confirmed) return;
+  setLoading(`deleteJobBtn-${jobId}`, true, "Tar bort…", "Ta bort jobb");
+  setNotice("accountNotice");
+  const { error } = await supabaseClient
+    .from("jobs")
+    .delete()
+    .eq("id", jobId)
+    .eq("user_id", currentUser.id);
+  if (error) {
+    setLoading(`deleteJobBtn-${jobId}`, false, "Tar bort…", "Ta bort jobb");
+    setNotice("accountNotice", "Jobbet kunde inte tas bort. Försök igen.", "error");
+    return;
+  }
+  publicJobs = publicJobs.filter((job) => Number(job.id) !== Number(jobId));
+  if (byId("publicJobs")) applyJobFilters();
+  await loadMyJobs();
+  setNotice("accountNotice", "Jobbet har tagits bort.", "success");
+}
+
+async function loadEarnings() {
+  if (!currentUser || !currentProfile?.performer_enabled) return;
+  const [jobsResult, reviewsResult] = await Promise.all([
+    supabaseClient
+      .from("jobs")
+      .select("id, title, agreed_price_sek, budget_sek, completed_at")
+      .eq("performer_id", currentUser.id)
+      .eq("status", "completed")
+      .order("completed_at", { ascending: false }),
+    supabaseClient
+      .from("reviews")
+      .select("rating")
+      .eq("reviewee_id", currentUser.id)
+  ]);
+  if (jobsResult.error || reviewsResult.error) {
+    if (byId("earningsList")) byId("earningsList").innerHTML = '<div class="notice error">Statistiken kunde inte hämtas.</div>';
+    return;
+  }
+  const completedJobs = jobsResult.data || [];
+  const ratings = reviewsResult.data || [];
+  const total = completedJobs.reduce((sum, job) => sum + Number(job.agreed_price_sek || job.budget_sek || 0), 0);
+  const average = ratings.length
+    ? ratings.reduce((sum, review) => sum + Number(review.rating), 0) / ratings.length
+    : 0;
+  if (byId("totalEarnings")) byId("totalEarnings").textContent = formatCurrency(total);
+  if (byId("completedJobsCount")) byId("completedJobsCount").textContent = String(completedJobs.length);
+  if (byId("averageRating")) byId("averageRating").textContent = ratings.length
+    ? `${average.toFixed(1).replace(".", ",")} ★ (${ratings.length})`
+    : "Inga betyg";
+  if (byId("savingsGoalInput")) byId("savingsGoalInput").value = currentProfile.savings_goal_sek || "";
+  updateGoalProgress(total, Number(currentProfile.savings_goal_sek || 0));
+  if (byId("earningsList")) {
+    byId("earningsList").innerHTML = completedJobs.length
+      ? `<strong>Utförda jobb</strong>${completedJobs.map((job) => `
+          <div class="earning-row">
+            <span><strong>${escapeHtml(job.title)}</strong><br><span class="account-meta">${new Date(job.completed_at).toLocaleDateString("sv-SE")}</span></span>
+            <strong>${formatCurrency(job.agreed_price_sek || job.budget_sek)}</strong>
+          </div>`).join("")}`
+      : '<div class="notice">När ett jobb markeras som klart visas summan här.</div>';
+  }
+}
+
+function updateGoalProgress(total, goal) {
+  const percent = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0;
+  if (byId("goalProgressBar")) byId("goalProgressBar").style.width = `${percent}%`;
+  if (byId("goalProgressText")) {
+    byId("goalProgressText").textContent = goal > 0
+      ? `${formatCurrency(total)} av ${formatCurrency(goal)} · ${percent}%`
+      : "Inget mål satt ännu.";
+  }
+}
+
+async function saveSavingsGoal() {
+  if (!currentUser || !currentProfile) return;
+  const goal = parseBudget(byId("savingsGoalInput")?.value || "");
+  if (!goal) {
+    setNotice("accountNotice", "Ange ett sparmål i kronor.", "error");
+    return;
+  }
+  setLoading("saveGoalBtn", true, "Sparar…", "Spara mål");
+  const { error } = await supabaseClient
+    .from("profiles")
+    .update({ savings_goal_sek: goal })
+    .eq("id", currentUser.id);
+  setLoading("saveGoalBtn", false, "Sparar…", "Spara mål");
+  if (error) {
+    setNotice("accountNotice", "Sparmålet kunde inte sparas.", "error");
+    return;
+  }
+  currentProfile.savings_goal_sek = goal;
+  setNotice("accountNotice", "Sparmålet har sparats.", "success");
+  await loadEarnings();
 }
 
 function openCallbackModal() {
@@ -571,6 +941,10 @@ function formatPrice(job) {
   return `${amount} kr`;
 }
 
+function formatCurrency(value) {
+  return `${Number(value || 0).toLocaleString("sv-SE")} kr`;
+}
+
 function formatRelativeDate(value) {
   const diffHours = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 3600000));
   if (diffHours < 1) return "Nyss";
@@ -596,6 +970,7 @@ async function signOut() {
   if (supabaseClient) await supabaseClient.auth.signOut();
   currentUser = null;
   currentProfile = null;
+  ownJobs = [];
   updateAccountButton();
   closeAccountModal();
   if (byId("publicJobs")) renderPublicJobs(publicJobs);
@@ -630,6 +1005,17 @@ function attachPageEvents() {
   byId("applicationModal")?.addEventListener("click", function (event) { if (event.target === this) closeApplicationModal(); });
   byId("authEmail")?.addEventListener("keydown", (event) => { if (event.key === "Enter") sendLoginCode(); });
   byId("authCode")?.addEventListener("keydown", (event) => { if (event.key === "Enter") verifyLoginCode(); });
+  byId("profileAvatarInput")?.addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) {
+      event.target.value = "";
+      setNotice("accountNotice", "Välj en bild som är mindre än 5 MB.", "error");
+      return;
+    }
+    const preview = byId("profileAvatarPreview");
+    if (preview) preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="" />`;
+  });
   ["filterSearch", "filterCategory", "filterLocation", "filterTiming", "filterMinBudget", "filterSort"].forEach((id) => {
     const element = byId(id);
     if (!element) return;

@@ -17,6 +17,8 @@ let availablePerformers = [];
 let selectedChatJobId = null;
 let selectedChatOtherLabel = "Den andra personen";
 let chatRefreshTimer = null;
+let notifications = [];
+let notificationRefreshTimer = null;
 
 const profileFields = "id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek, availability_status, available_until";
 
@@ -95,7 +97,6 @@ async function showAccountStep() {
   byId("findJobsBtn")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
   byId("enablePerformerBtn")?.classList.toggle("hidden", Boolean(currentProfile?.performer_enabled));
   byId("accountTabEarnings")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
-  byId("availabilityCard")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
   updateProfilePanel();
   showAccountTab("jobs");
   await Promise.all([
@@ -124,6 +125,7 @@ function openAccountModal(preselectedRole = "customer") {
 }
 
 function closeAccountModal() {
+  closeAvailabilityMenu();
   closeJobChat();
   byId("accountModal")?.classList.remove("show");
 }
@@ -266,6 +268,8 @@ async function savePerformerProfile() {
 
 function updateAccountButton() {
   if (byId("accountBtn")) byId("accountBtn").textContent = currentUser ? "Mitt konto" : "Logga in";
+  byId("notificationButton")?.classList.toggle("hidden", !currentUser);
+  if (!currentUser) closeNotificationCenter();
 }
 
 function showAccountTab(tabName) {
@@ -281,6 +285,9 @@ function showAccountTab(tabName) {
     byId(buttonId)?.setAttribute("aria-selected", String(isActive));
     byId(panelId)?.classList.toggle("hidden", !isActive);
   });
+  const showAvailability = requestedTab === "profile" && Boolean(currentProfile?.performer_enabled);
+  byId("availabilityMenuWrap")?.classList.toggle("hidden", !showAvailability);
+  if (!showAvailability) closeAvailabilityMenu();
 }
 
 function initials(name) {
@@ -343,14 +350,13 @@ function availabilityLabel(status) {
 }
 
 function updateAvailabilityCard() {
-  const card = byId("availabilityCard");
-  if (!card || !currentProfile) return;
-  card.classList.toggle("hidden", !currentProfile.performer_enabled);
+  const button = byId("availabilityStatusButton");
+  if (!button || !currentProfile) return;
   if (!currentProfile.performer_enabled) return;
   const status = activeAvailability();
-  if (byId("availabilityStatusText")) byId("availabilityStatusText").textContent = availabilityLabel(status);
-  card.classList.toggle("is-active", status !== "unavailable");
-  card.classList.toggle("is-now", status === "now");
+  if (byId("availabilityStatusText")) byId("availabilityStatusText").textContent = status === "unavailable" ? "Sätt status" : availabilityLabel(status);
+  button.classList.toggle("is-active", status !== "unavailable");
+  button.classList.toggle("is-now", status === "now");
   byId("clearAvailabilityBtn")?.classList.toggle("hidden", status === "unavailable");
   if (byId("availabilityExpiry")) {
     const expiry = status === "unavailable" ? "" : new Date(currentProfile.available_until).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
@@ -360,6 +366,135 @@ function updateAvailabilityCard() {
         ? "Gäller till midnatt och stängs sedan av automatiskt."
         : "Slå på statusen när du vill synas för beställare.";
   }
+}
+
+function toggleAvailabilityMenu() {
+  const popover = byId("availabilityPopover");
+  const button = byId("availabilityStatusButton");
+  if (!popover || !button) return;
+  const willOpen = popover.classList.contains("hidden");
+  popover.classList.toggle("hidden", !willOpen);
+  button.setAttribute("aria-expanded", String(willOpen));
+}
+
+function closeAvailabilityMenu() {
+  byId("availabilityPopover")?.classList.add("hidden");
+  byId("availabilityStatusButton")?.setAttribute("aria-expanded", "false");
+}
+
+function notificationIcon(type) {
+  return ({
+    job_application: "🙋",
+    job_accepted: "✓",
+    job_started: "▶",
+    payout_ready: "kr",
+    new_message: "💬"
+  })[type] || "•";
+}
+
+function updateNotificationBadge() {
+  const unreadCount = notifications.filter((notification) => !notification.read_at).length;
+  const badge = byId("notificationBadge");
+  if (!badge) return;
+  badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+  badge.classList.toggle("hidden", unreadCount === 0);
+  byId("notificationButton")?.setAttribute("aria-label", unreadCount ? `Öppna notiser, ${unreadCount} olästa` : "Öppna notiser");
+}
+
+function renderNotifications() {
+  const list = byId("notificationList");
+  if (!list) return;
+  list.innerHTML = notifications.length
+    ? notifications.map((notification) => `
+        <button class="notification-item ${notification.read_at ? "" : "is-unread"}" type="button" onclick="openNotification(${notification.id}, ${notification.job_id || "null"})">
+          <span class="notification-icon" aria-hidden="true">${escapeHtml(notificationIcon(notification.type))}</span>
+          <span class="notification-copy">
+            <strong>${escapeHtml(notification.title)}</strong>
+            <span>${escapeHtml(notification.body || "")}</span>
+            <time datetime="${escapeHtml(notification.created_at)}">${escapeHtml(formatRelativeDate(notification.created_at))}</time>
+          </span>
+        </button>`).join("")
+    : '<div class="notification-empty"><strong>Inga notiser ännu</strong><br><span>Här ser du när något händer med dina jobb.</span></div>';
+  byId("markAllNotificationsBtn")?.classList.toggle("hidden", !notifications.some((notification) => !notification.read_at));
+  updateNotificationBadge();
+}
+
+async function loadNotifications() {
+  if (!supabaseClient || !currentUser || !byId("notificationList")) return;
+  const { data, error } = await supabaseClient
+    .from("notifications")
+    .select("id, type, title, body, job_id, read_at, created_at")
+    .eq("user_id", currentUser.id)
+    .order("created_at", { ascending: false })
+    .limit(40);
+  if (error) {
+    byId("notificationList").innerHTML = '<div class="notification-empty">Notiscentret behöver aktiveras i databasen.</div>';
+    return;
+  }
+  notifications = data || [];
+  renderNotifications();
+}
+
+async function toggleNotificationCenter() {
+  if (!currentUser) return;
+  const center = byId("notificationCenter");
+  const button = byId("notificationButton");
+  if (!center || !button) return;
+  const willOpen = center.classList.contains("hidden");
+  center.classList.toggle("hidden", !willOpen);
+  button.setAttribute("aria-expanded", String(willOpen));
+  if (willOpen) await loadNotifications();
+}
+
+function closeNotificationCenter() {
+  byId("notificationCenter")?.classList.add("hidden");
+  byId("notificationButton")?.setAttribute("aria-expanded", "false");
+}
+
+async function markNotificationRead(notificationId) {
+  const notification = notifications.find((item) => Number(item.id) === Number(notificationId));
+  if (!notification || notification.read_at) return;
+  const readAt = new Date().toISOString();
+  const { error } = await supabaseClient
+    .from("notifications")
+    .update({ read_at: readAt })
+    .eq("id", notificationId)
+    .eq("user_id", currentUser.id);
+  if (!error) {
+    notification.read_at = readAt;
+    renderNotifications();
+  }
+}
+
+async function markAllNotificationsRead() {
+  if (!currentUser || !notifications.some((notification) => !notification.read_at)) return;
+  const readAt = new Date().toISOString();
+  const { error } = await supabaseClient
+    .from("notifications")
+    .update({ read_at: readAt })
+    .eq("user_id", currentUser.id)
+    .is("read_at", null);
+  if (!error) {
+    notifications.forEach((notification) => { notification.read_at ||= readAt; });
+    renderNotifications();
+  }
+}
+
+async function openNotification(notificationId, jobId) {
+  await markNotificationRead(notificationId);
+  closeNotificationCenter();
+  if (jobId) {
+    openAccountModal();
+    window.setTimeout(() => showAccountTab("jobs"), 100);
+  }
+}
+
+function startNotificationRefresh() {
+  if (notificationRefreshTimer) window.clearInterval(notificationRefreshTimer);
+  notificationRefreshTimer = null;
+  if (!currentUser) return;
+  loadNotifications();
+  notificationRefreshTimer = window.setInterval(loadNotifications, 30000);
 }
 
 function setAvailabilityLoading(isLoading) {
@@ -382,6 +517,7 @@ async function saveAvailabilityStatus(status) {
   currentProfile.availability_status = data[0].availability_status;
   currentProfile.available_until = data[0].available_until;
   updateAvailabilityCard();
+  closeAvailabilityMenu();
   setNotice("accountNotice", status === "unavailable" ? "Du visas inte längre som tillgänglig." : "Din tillgänglighet är uppdaterad.", "success");
 }
 
@@ -1106,7 +1242,7 @@ async function loadAvailablePerformers() {
   }
   const { data, error } = await supabaseClient.rpc("get_available_performers");
   if (error) {
-    if (byId("availabilitySection")) return;
+    byId("availabilitySection")?.classList.remove("hidden");
     if (byId("performersCount")) byId("performersCount").textContent = "Listan kunde inte laddas";
     container.innerHTML = '<div class="notice error">Utförarna kunde inte hämtas. Databasuppdateringen kan saknas.</div>';
     return;
@@ -1261,12 +1397,16 @@ function escapeHtml(value) {
 }
 
 async function signOut() {
+  closeNotificationCenter();
   closeJobChat();
   if (supabaseClient) await supabaseClient.auth.signOut();
   currentUser = null;
   currentProfile = null;
   ownJobs = [];
   assignedJobs = [];
+  notifications = [];
+  if (notificationRefreshTimer) window.clearInterval(notificationRefreshTimer);
+  notificationRefreshTimer = null;
   updateAccountButton();
   closeAccountModal();
   if (byId("publicJobs")) renderPublicJobs(publicJobs);
@@ -1278,11 +1418,16 @@ async function initializeAuth() {
     currentUser = data.session?.user || null;
     if (currentUser) await loadProfile();
     updateAccountButton();
+    startNotificationRefresh();
     supabaseClient.auth.onAuthStateChange(async (_event, session) => {
       currentUser = session?.user || null;
       if (currentUser) await loadProfile();
-      else currentProfile = null;
+      else {
+        currentProfile = null;
+        notifications = [];
+      }
       updateAccountButton();
+      startNotificationRefresh();
       if (byId("publicJobs")) renderPublicJobs(publicJobs);
     });
   }
@@ -1301,6 +1446,13 @@ function attachPageEvents() {
   byId("callbackModal")?.addEventListener("click", function (event) { if (event.target === this) closeCallbackModal(); });
   byId("applicationModal")?.addEventListener("click", function (event) { if (event.target === this) closeApplicationModal(); });
   byId("jobChatModal")?.addEventListener("click", function (event) { if (event.target === this) closeJobChat(); });
+  document.addEventListener("click", (event) => {
+    const notificationCenter = byId("notificationCenter");
+    const notificationButton = byId("notificationButton");
+    if (notificationCenter && notificationButton && !notificationCenter.contains(event.target) && !notificationButton.contains(event.target)) closeNotificationCenter();
+    const availabilityWrap = byId("availabilityMenuWrap");
+    if (availabilityWrap && !availabilityWrap.contains(event.target)) closeAvailabilityMenu();
+  });
   byId("authEmail")?.addEventListener("keydown", (event) => { if (event.key === "Enter") sendLoginCode(); });
   byId("authCode")?.addEventListener("keydown", (event) => { if (event.key === "Enter") verifyLoginCode(); });
   byId("profileAvatarInput")?.addEventListener("change", (event) => {

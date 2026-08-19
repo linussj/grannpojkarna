@@ -39,6 +39,27 @@ nav{min-height:74px;display:flex;align-items:center;justify-content:space-betwee
 .navlinks{display:flex;gap:28px;color:var(--muted);font-weight:700}
 .navlinks a:hover,.navlinks a.active{color:var(--brand-dark)}
 .nav-actions{display:flex;align-items:center;gap:10px}
+.notification-button{position:relative;width:43px;height:43px;border:1px solid var(--line);border-radius:14px;background:white;display:grid;place-items:center;cursor:pointer;font-size:1.05rem}
+.notification-button:hover{background:#f8faf8}
+.notification-button[aria-expanded="true"]{background:var(--brand-soft);border-color:#b8d1c2}
+.notification-badge{position:absolute;right:-5px;top:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#b23d2b;color:white;border:2px solid white;display:grid;place-items:center;font-size:.67rem;font-weight:900;line-height:1}
+.notification-center{position:fixed;right:max(20px,calc((100vw - 1180px)/2 + 24px));top:84px;z-index:35;width:min(390px,calc(100vw - 32px));max-height:min(600px,calc(100vh - 104px));overflow:hidden;background:white;border:1px solid var(--line);border-radius:20px;box-shadow:0 22px 60px rgba(20,38,29,.2)}
+.notification-center-head{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;padding:18px;border-bottom:1px solid var(--line)}
+.notification-center-head>div{display:grid;gap:1px}
+.notification-center-head>div>strong{font-size:1.1rem}
+.notification-center-head>div>span{font-size:.78rem;color:var(--muted)}
+.notification-center-head .link-button{font-size:.75rem;text-align:right}
+.notification-list{display:grid;max-height:min(500px,calc(100vh - 185px));overflow:auto}
+.notification-item{width:100%;border:0;border-bottom:1px solid var(--line);background:white;padding:15px 17px;display:grid;grid-template-columns:36px 1fr;gap:11px;text-align:left;cursor:pointer;color:var(--ink)}
+.notification-item:last-child{border-bottom:0}
+.notification-item:hover{background:#f8faf8}
+.notification-item.is-unread{background:#f0f8f3}
+.notification-icon{width:36px;height:36px;border-radius:12px;background:var(--brand-soft);color:var(--brand-dark);display:grid;place-items:center;font-weight:900}
+.notification-copy{display:grid;gap:3px;min-width:0}
+.notification-copy strong{font-size:.9rem}
+.notification-copy span{font-size:.8rem;color:var(--muted);line-height:1.4}
+.notification-copy time{font-size:.7rem;color:#89968f}
+.notification-empty{padding:30px 20px;text-align:center;color:var(--muted)}
 .btn{
   border:0;border-radius:14px;padding:14px 20px;font-weight:800;cursor:pointer;
   transition:.2s ease;display:inline-flex;align-items:center;justify-content:center;gap:8px
@@ -159,6 +180,8 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .auth-stack{display:grid;gap:14px;margin-top:22px}
 .account-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin:18px 0}
 .profile-identity{display:flex;align-items:center;gap:13px;min-width:0}
+.account-name-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.account-name-row h3{margin:0}
 .account-avatar{width:52px;height:52px;border-radius:18px;background:var(--brand-soft);color:var(--brand-dark);display:grid;place-items:center;font-size:1.05rem;font-weight:900;overflow:hidden;flex:0 0 auto}
 .account-avatar img{width:100%;height:100%;object-fit:cover}
 .account-avatar-large{width:76px;height:76px;border-radius:24px;font-size:1.4rem}
@@ -167,17 +190,20 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .profile-prompt{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 16px;border:1px solid #cfe0d5;border-radius:16px;background:var(--brand-soft);margin:12px 0 18px}
 .profile-prompt div{display:grid;gap:2px}
 .profile-prompt span{color:var(--muted);font-size:.88rem}
-.availability-card{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;padding:17px 18px;border:1px solid var(--line);border-radius:18px;background:#fbfcfb;margin:0 0 18px}
-.availability-card.is-active{border-color:#acd0ba;background:#f0f8f3}
-.availability-card.is-now{border-color:#68ac81;box-shadow:0 0 0 3px rgba(47,107,79,.07)}
-.availability-card-copy{display:flex;align-items:center;gap:12px;min-width:0}
-.availability-card-copy>div{display:grid;gap:3px}
-.availability-card-copy span:not(.availability-dot){font-size:.85rem;color:var(--muted)}
-.availability-dot{width:13px;height:13px;border-radius:50%;background:#a9b3ad;box-shadow:0 0 0 5px rgba(169,179,173,.14);flex:0 0 auto}
-.availability-card.is-active .availability-dot{background:#2c9a58;box-shadow:0 0 0 5px rgba(44,154,88,.14)}
-.availability-card.is-now .availability-dot{animation:availabilityPulse 1.8s ease-in-out infinite}
+.availability-menu-wrap{position:relative}
+.availability-status-button{border:1px solid #cbd7d0;background:#f7f9f8;color:var(--muted);border-radius:999px;padding:6px 10px;display:inline-flex;align-items:center;gap:7px;font-size:.76rem;font-weight:850;cursor:pointer;white-space:nowrap}
+.availability-status-button:hover{background:#f0f4f1}
+.availability-dot{width:8px;height:8px;border-radius:50%;background:#a9b3ad;box-shadow:0 0 0 4px rgba(169,179,173,.12);flex:0 0 auto}
+.availability-status-button.is-active{background:#e7f6eb;border-color:#9fc9ae;color:#1f6a3d}
+.availability-status-button.is-active .availability-dot{background:#2c9a58;box-shadow:0 0 0 4px rgba(44,154,88,.14)}
+.availability-status-button.is-now .availability-dot{animation:availabilityPulse 1.8s ease-in-out infinite}
+.availability-popover{position:absolute;left:0;top:calc(100% + 9px);z-index:12;width:min(330px,calc(100vw - 56px));padding:15px;border:1px solid var(--line);border-radius:16px;background:white;box-shadow:0 18px 45px rgba(20,38,29,.18);display:grid;gap:9px}
+.availability-popover>span{font-size:.8rem;color:var(--muted)}
 .availability-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .availability-actions .link-button{font-size:.8rem;margin-left:4px}
+.availability-popover .availability-actions{display:grid;grid-template-columns:1fr 1fr;justify-content:stretch}
+.availability-popover .availability-actions .btn{padding:9px 10px;font-size:.76rem}
+.availability-popover .availability-actions .link-button{grid-column:1/-1;justify-self:start;margin:3px 0 0}
 .btn:disabled,.link-button:disabled{opacity:.55;cursor:not-allowed;transform:none}
 @keyframes availabilityPulse{50%{box-shadow:0 0 0 9px rgba(44,154,88,.05)}}
 .account-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}
@@ -281,6 +307,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .availability-section-head{display:grid;grid-template-columns:1fr auto;gap:28px;align-items:end;margin-bottom:18px}
 .availability-section-head h2{font-size:clamp(2rem,4vw,3rem);letter-spacing:-.04em;line-height:1.05;margin:13px 0 8px}
 .availability-section-head p{margin:0;color:var(--muted);max-width:690px}
+.performer-filters{display:grid;grid-template-columns:1.25fr .75fr;gap:12px;margin:22px 0 12px}
 .performers-count{font-size:.88rem;color:var(--muted);font-weight:750;margin-bottom:13px}
 .performer-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .performer-card{display:grid;align-content:start;gap:15px;border:1px solid #cfe0d5;border-radius:22px;padding:20px;background:white;box-shadow:0 10px 28px rgba(30,70,50,.06)}
@@ -313,6 +340,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .mobile-filter-btn{display:inline-flex}
   .performer-grid{grid-template-columns:1fr}
   .availability-section-head{grid-template-columns:1fr;align-items:start}
+  .performer-filters{grid-template-columns:1fr}
 }
 @media(max-width:640px){
   .wrap{padding:0 16px}
@@ -333,10 +361,8 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .job-progress-step:not(:last-child)::after{left:11px;top:21px;bottom:-7px;width:2px;height:auto;right:auto}
   .profile-prompt{align-items:flex-start;flex-direction:column}
   .profile-prompt .btn{width:100%}
-  .availability-card{grid-template-columns:1fr}
-  .availability-actions{justify-content:stretch}
-  .availability-actions .btn{flex:1 1 150px}
-  .availability-actions .link-button{width:100%;text-align:left;margin:3px 0 0}
+  .notification-center{right:16px;top:76px}
+  .availability-popover{left:auto;right:-50px;width:min(330px,calc(100vw - 32px))}
   .avatar-editor{align-items:flex-start}
   .earnings-grid{grid-template-columns:1fr}
   .goal-controls{grid-template-columns:1fr}

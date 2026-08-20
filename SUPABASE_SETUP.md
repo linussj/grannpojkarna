@@ -52,6 +52,7 @@ Kör migreringarna i nummerordning om de inte redan är installerade:
 - `supabase-migration-5.sql`: statusarna accepterat/pågående/klart samt privat jobbchatt.
 - `supabase-migration-6.sql`: notiscenter för intresseanmälningar, valda utförare, jobbstatus, chatt och ersättning klar för utbetalning.
 - `supabase-migration-7.sql`: jobbmatchningar, skickade intresseanmälningar och separata notiser för slutfört jobb.
+- `supabase-migration-8.sql`: redigering av egna öppna jobb, publika utförarprofiler, privata direktmeddelanden och korrekt hantering av timpris.
 
 Migration 5 gör jobbflödet låst till **Öppet → Accepterat → Pågående → Klart**.
 Endast beställaren kan bekräfta ett pågående jobb som klart. Chatten kan bara

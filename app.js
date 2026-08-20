@@ -7,6 +7,8 @@ const supabaseClient = hasBackendConfig && window.supabase
 let currentUser = null;
 let currentProfile = null;
 let pendingJob = false;
+let pendingEditJobId = null;
+let editingJobId = null;
 let pendingApplicationJobId = null;
 let selectedApplicationJobId = null;
 let roleHint = document.body.dataset.page === "jobs" ? "performer" : "customer";
@@ -17,6 +19,10 @@ let availablePerformers = [];
 let selectedChatJobId = null;
 let selectedChatOtherLabel = "Den andra personen";
 let chatRefreshTimer = null;
+let selectedDirectProfile = null;
+let pendingDirectProfileId = null;
+let pendingDirectFocusMessage = false;
+let directMessageRefreshTimer = null;
 let notifications = [];
 let notificationRefreshTimer = null;
 
@@ -394,7 +400,8 @@ function notificationIcon(type) {
     job_started: "▶",
     job_completed: "✓",
     payout_ready: "kr",
-    new_message: "💬"
+    new_message: "💬",
+    direct_message: "💬"
   })[type] || "•";
 }
 
@@ -416,7 +423,7 @@ function renderNotifications() {
   if (!list) return;
   list.innerHTML = notifications.length
     ? notifications.map((notification) => `
-        <button class="notification-item ${notification.read_at ? "" : "is-unread"}" type="button" onclick="openNotification(${notification.id}, ${notification.job_id || "null"})">
+        <button class="notification-item ${notification.read_at ? "" : "is-unread"}" type="button" onclick="openNotification(${notification.id}, ${notification.job_id || "null"}, ${notification.related_user_id ? `'${notification.related_user_id}'` : "null"})">
           <span class="notification-icon" aria-hidden="true">${escapeHtml(notificationIcon(notification.type))}</span>
           <span class="notification-copy">
             <strong>${escapeHtml(notification.title)}</strong>
@@ -424,7 +431,7 @@ function renderNotifications() {
             <time datetime="${escapeHtml(notification.created_at)}">${escapeHtml(formatRelativeDate(notification.created_at))}</time>
           </span>
         </button>`).join("")
-    : '<div class="notification-empty"><strong>Inga notiser ännu</strong><br><span>Här ser du när något händer med dina jobb.</span></div>';
+    : '<div class="notification-empty"><strong>Inga notiser ännu</strong><br><span>Här ser du nya meddelanden och vad som händer med dina jobb.</span></div>';
   byId("markAllNotificationsBtn")?.classList.toggle("hidden", !notifications.some((notification) => !notification.read_at));
   updateNotificationBadge();
 }
@@ -433,7 +440,7 @@ async function loadNotifications() {
   if (!supabaseClient || !currentUser || !byId("notificationList")) return;
   const { data, error } = await supabaseClient
     .from("notifications")
-    .select("id, type, title, body, job_id, read_at, created_at")
+    .select("id, type, title, body, job_id, related_user_id, read_at, created_at")
     .eq("user_id", currentUser.id)
     .order("created_at", { ascending: false })
     .limit(40);
@@ -489,12 +496,14 @@ async function markAllNotificationsRead() {
   }
 }
 
-async function openNotification(notificationId, jobId) {
+async function openNotification(notificationId, jobId, relatedUserId = null) {
   await markNotificationRead(notificationId);
   closeNotificationCenter();
   if (jobId) {
     openAccountModal();
     window.setTimeout(() => showAccountTab("jobs"), 100);
+  } else if (relatedUserId) {
+    await openPerformerProfile(relatedUserId, true);
   }
 }
 
@@ -607,6 +616,7 @@ function openModal(type) {
     openAccountModal("customer");
     return;
   }
+  prepareNewJobForm();
   byId("modal").classList.add("show");
   renderJobModalPerformers();
   setNotice("jobNotice");
@@ -614,14 +624,31 @@ function openModal(type) {
 
 function closeModal() {
   byId("modal")?.classList.remove("show");
+  window.setTimeout(prepareNewJobForm, 120);
 }
 
 function continuePendingAction() {
+  if (pendingDirectProfileId && currentProfile) {
+    const profileId = pendingDirectProfileId;
+    const focusMessage = pendingDirectFocusMessage;
+    pendingDirectProfileId = null;
+    pendingDirectFocusMessage = false;
+    closeAccountModal();
+    setTimeout(() => openPerformerProfile(profileId, focusMessage), 120);
+    return;
+  }
   if (pendingApplicationJobId && currentProfile?.performer_enabled) {
     const jobId = pendingApplicationJobId;
     pendingApplicationJobId = null;
     closeAccountModal();
     setTimeout(() => openApplicationModal(jobId), 120);
+    return;
+  }
+  if (pendingEditJobId && currentProfile) {
+    const jobId = pendingEditJobId;
+    pendingEditJobId = null;
+    closeAccountModal();
+    setTimeout(() => openEditJob(jobId), 120);
     return;
   }
   if (pendingJob && currentProfile) {
@@ -639,6 +666,78 @@ function openJobFromAccount() {
 function parseBudget(value) {
   const digits = String(value || "").replace(/\D/g, "");
   return digits ? Number(digits) : null;
+}
+
+function updateJobPriceTypeFields() {
+  const priceType = byId("jobPriceType")?.value || "fixed";
+  const label = byId("budgetLabel");
+  const input = byId("jobBudget");
+  const help = byId("jobBudgetHelp");
+  if (!label || !input || !help) return;
+  if (priceType === "hourly") {
+    label.textContent = "Timpris";
+    input.placeholder = "Exempel: 250 kr/tim";
+    help.textContent = "Beloppet gäller per arbetad timme, inte för hela jobbet.";
+  } else if (priceType === "quote") {
+    label.textContent = "Ungefärlig budget";
+    input.placeholder = "Exempel: 2 000 kr";
+    help.textContent = "Utförare kan föreslå ett annat pris.";
+  } else {
+    label.textContent = "Fast totalpris";
+    input.placeholder = "Exempel: 600 kr totalt";
+    help.textContent = "Beloppet gäller för hela jobbet.";
+  }
+}
+
+function prepareNewJobForm() {
+  editingJobId = null;
+  byId("jobForm")?.reset();
+  if (byId("modalTitle")) byId("modalTitle").textContent = "Lägg upp ett jobb";
+  if (byId("submitBtn")) byId("submitBtn").textContent = "Publicera jobb";
+  updateJobPriceTypeFields();
+  setNotice("jobNotice");
+}
+
+async function openEditJob(jobId) {
+  if (!currentUser || !currentProfile) {
+    pendingEditJobId = Number(jobId);
+    openAccountModal("customer");
+    return;
+  }
+  if (!byId("modal")) {
+    window.location.href = `index.html?editJob=${encodeURIComponent(jobId)}`;
+    return;
+  }
+  let job = ownJobs.find((item) => Number(item.id) === Number(jobId));
+  if (!job) {
+    const { data, error } = await supabaseClient
+      .from("jobs")
+      .select("id, user_id, title, description, location, timing, budget_sek, price_type, category, status")
+      .eq("id", jobId)
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+    if (error) return;
+    job = data;
+  }
+  if (!job || job.status !== "open" || job.user_id !== currentUser.id) {
+    setNotice("accountNotice", "Endast egna öppna jobb kan redigeras.", "error");
+    return;
+  }
+  editingJobId = Number(job.id);
+  if (byId("jobTitle")) byId("jobTitle").value = job.title || "";
+  if (byId("description")) byId("description").value = job.description || "";
+  if (byId("jobLocation")) byId("jobLocation").value = job.location || "";
+  if (byId("jobWhen")) byId("jobWhen").value = job.timing || "Idag";
+  if (byId("jobBudget")) byId("jobBudget").value = job.budget_sek || "";
+  if (byId("jobPriceType")) byId("jobPriceType").value = job.price_type || "fixed";
+  if (byId("jobCategory")) byId("jobCategory").value = job.category || "Övrigt";
+  if (byId("modalTitle")) byId("modalTitle").textContent = "Redigera jobb";
+  if (byId("submitBtn")) byId("submitBtn").textContent = "Spara ändringar";
+  updateJobPriceTypeFields();
+  setNotice("jobNotice", "Du kan redigera jobbet så länge ingen utförare har valts.");
+  closeAccountModal();
+  byId("modal")?.classList.add("show");
+  renderJobModalPerformers();
 }
 
 async function submitJob(event) {
@@ -663,11 +762,32 @@ async function submitJob(event) {
     setNotice("jobNotice", "Fyll i rubrik, beskrivning, plats och budget.", "error");
     return;
   }
-  setLoading("submitBtn", true, "Publicerar…", "Publicera jobb");
-  const { error } = await supabaseClient.from("jobs").insert(payload);
-  setLoading("submitBtn", false, "Publicerar…", "Publicera jobb");
+  const isEditing = Boolean(editingJobId);
+  setLoading("submitBtn", true, isEditing ? "Sparar…" : "Publicerar…", isEditing ? "Spara ändringar" : "Publicera jobb");
+  const { error } = isEditing
+    ? await supabaseClient.rpc("edit_my_open_job", {
+        p_job_id: editingJobId,
+        p_title: payload.title,
+        p_description: payload.description,
+        p_location: payload.location,
+        p_timing: payload.timing,
+        p_budget_sek: payload.budget_sek,
+        p_price_type: payload.price_type,
+        p_category: payload.category
+      })
+    : await supabaseClient.from("jobs").insert(payload);
+  setLoading("submitBtn", false, isEditing ? "Sparar…" : "Publicerar…", isEditing ? "Spara ändringar" : "Publicera jobb");
   if (error) {
-    setNotice("jobNotice", "Jobbet kunde inte publiceras. Kontrollera att databasuppdateringen är körd.", "error");
+    setNotice("jobNotice", isEditing ? "Ändringarna kunde inte sparas. Jobbet kan ha accepterats under tiden." : "Jobbet kunde inte publiceras. Kontrollera att databasuppdateringen är körd.", "error");
+    return;
+  }
+  if (isEditing) {
+    editingJobId = null;
+    setNotice("jobNotice", "Ändringarna är sparade.", "success");
+    setTimeout(() => {
+      closeModal();
+      openAccountModal();
+    }, 700);
     return;
   }
   byId("jobForm").reset();
@@ -766,11 +886,12 @@ function renderAccountJob(job, relationship) {
       ${renderJobProgress(job.status)}
       ${statusHelp ? `<div class="job-status-help">${escapeHtml(statusHelp)}</div>` : ""}
       <div class="job-row-footer">
-        <strong>${job.agreed_price_sek ? `${formatCurrency(job.agreed_price_sek)} överenskommet` : formatPrice(job)}</strong>
+        <strong>${job.agreed_price_sek ? `${formatCurrency(job.agreed_price_sek)}${job.price_type === "hourly" ? "/tim" : ""} överenskommet` : formatPrice(job)}</strong>
         <div class="account-actions">
           ${canChat ? `<button class="btn btn-light btn-small" type="button" onclick="openJobChat(${job.id})">Öppna chatt</button>` : ""}
           ${job.status === "accepted" ? `<button class="btn btn-primary btn-small" id="startJobBtn-${job.id}" type="button" onclick="startJob(${job.id})">Markera som pågående</button>` : ""}
           ${isOwner && job.status === "in_progress" ? `<button class="btn btn-primary btn-small" id="completeJobBtn-${job.id}" type="button" onclick="markJobCompleted(${job.id})">Bekräfta som klart</button>` : ""}
+          ${isOwner && job.status === "open" ? `<button class="btn btn-light btn-small" id="editJobBtn-${job.id}" type="button" onclick="openEditJob(${job.id})">Redigera jobb</button>` : ""}
           ${isOwner && ["open", "cancelled"].includes(job.status) ? `<button class="btn btn-danger btn-small" id="deleteJobBtn-${job.id}" type="button" onclick="deleteJob(${job.id})">Ta bort jobb</button>` : ""}
         </div>
       </div>
@@ -804,7 +925,7 @@ function renderJobApplications(job) {
       <h5>${job.status !== "open" ? "Vald utförare" : `Intresseanmälningar (${job.applications.length})`}</h5>
       ${visibleApplications.map((application) => {
         const proposedPrice = application.proposed_price_sek
-          ? formatCurrency(application.proposed_price_sek)
+          ? `${formatCurrency(application.proposed_price_sek)}${job.price_type === "hourly" ? "/tim" : ""}`
           : "Inget prisförslag";
         const rating = Number(application.average_rating || 0);
         const ratingCount = Number(application.review_count || 0);
@@ -812,7 +933,7 @@ function renderJobApplications(job) {
           <div class="application-card">
             <div class="application-avatar">${application.avatar_path ? `<img src="${escapeHtml(avatarUrl(application.avatar_path))}" alt="" />` : escapeHtml(initials(application.display_name))}</div>
             <div>
-              <h6>${escapeHtml(application.display_name || "Utförare")}</h6>
+              <h6><button class="profile-link-button" type="button" onclick="openPerformerProfile('${application.performer_id}')">${escapeHtml(application.display_name || "Utförare")}</button></h6>
               ${application.availability_status ? `<span class="availability-badge"><span aria-hidden="true"></span>${availabilityLabel(application.availability_status)}</span>` : ""}
               <div class="rating-line">${ratingCount ? `${rating.toFixed(1).replace(".", ",")} ★ · ${ratingCount} ${ratingCount === 1 ? "betyg" : "betyg"}` : "Ny utförare · inga betyg ännu"}</div>
               ${application.bio ? `<p>${escapeHtml(application.bio)}</p>` : ""}
@@ -857,7 +978,10 @@ async function acceptApplication(applicationId, jobId) {
   const application = job?.applications.find((item) => Number(item.application_id) === Number(applicationId));
   if (!job || !application) return;
   const suggestedPrice = application.proposed_price_sek || job.budget_sek;
-  const enteredPrice = window.prompt("Bekräfta överenskommet pris i kronor:", suggestedPrice);
+  const promptText = job.price_type === "hourly"
+    ? "Bekräfta överenskommet timpris i kronor per timme:"
+    : "Bekräfta överenskommet totalpris i kronor:";
+  const enteredPrice = window.prompt(promptText, suggestedPrice);
   if (enteredPrice === null) return;
   const agreedPrice = parseBudget(enteredPrice);
   if (!agreedPrice) {
@@ -954,8 +1078,15 @@ async function openJobChat(jobId) {
   const job = findAccountJob(jobId);
   if (!job || !["accepted", "in_progress", "completed"].includes(job.status)) return;
   selectedChatJobId = Number(jobId);
-  selectedChatOtherLabel = job.user_id === currentUser.id ? "Utföraren" : "Beställaren";
+  const otherUserId = job.user_id === currentUser.id ? job.performer_id : job.user_id;
+  const fallbackLabel = job.user_id === currentUser.id ? "Utföraren" : "Beställaren";
+  selectedChatOtherLabel = fallbackLabel;
+  if (otherUserId) {
+    const { data: otherProfile } = await supabaseClient.rpc("get_contact_profile", { p_profile_id: otherUserId });
+    selectedChatOtherLabel = otherProfile?.[0]?.display_name || fallbackLabel;
+  }
   if (byId("jobChatTitle")) byId("jobChatTitle").textContent = job.title || job.category || "Jobb";
+  if (byId("jobChatParticipant")) byId("jobChatParticipant").textContent = `Chatt med ${selectedChatOtherLabel}`;
   byId("jobChatForm")?.classList.toggle("hidden", job.status === "completed");
   setNotice("jobChatNotice", job.status === "completed" ? "Jobbet är avslutat. Chatten är sparad men stängd för nya meddelanden." : "");
   byId("jobChatModal")?.classList.add("show");
@@ -973,7 +1104,148 @@ function closeJobChat() {
   byId("jobChatModal")?.classList.remove("show");
   if (byId("jobChatMessages")) byId("jobChatMessages").innerHTML = "";
   if (byId("jobChatInput")) byId("jobChatInput").value = "";
+  if (byId("jobChatParticipant")) byId("jobChatParticipant").textContent = "";
   setNotice("jobChatNotice");
+}
+
+function renderPublicProfile(profile) {
+  const container = byId("publicProfileContent");
+  if (!container || !profile) return;
+  const rating = Number(profile.average_rating || 0);
+  const reviewCount = Number(profile.review_count || 0);
+  const skills = profile.skills || [];
+  const status = activeAvailability(profile);
+  if (byId("publicProfileEyebrow")) byId("publicProfileEyebrow").textContent = profile.performer_enabled ? "Utförarprofil" : "Kontaktprofil";
+  if (byId("publicProfileTitle")) byId("publicProfileTitle").textContent = profile.display_name || "Profil";
+  container.innerHTML = `
+    <div class="public-profile-hero">
+      <div class="public-profile-avatar">${profile.avatar_path ? `<img src="${escapeHtml(avatarUrl(profile.avatar_path))}" alt="" />` : escapeHtml(initials(profile.display_name))}</div>
+      <div class="public-profile-summary">
+        ${status !== "unavailable" ? `<span class="availability-badge"><span aria-hidden="true"></span>${availabilityLabel(status)}</span>` : ""}
+        <h4>${escapeHtml(profile.display_name || "Utförare")}</h4>
+        <div class="rating-line">${reviewCount ? `${rating.toFixed(1).replace(".", ",")} ★ · ${reviewCount} betyg` : "Inga betyg ännu"}</div>
+      </div>
+    </div>
+    <div class="public-profile-facts">
+      <span>📍 ${escapeHtml(profile.service_area || "Område ej angivet")}</span>
+      ${profile.performer_enabled ? `<span>✓ ${Number(profile.completed_jobs || 0)} utförda jobb</span>` : ""}
+    </div>
+    <p class="public-profile-bio">${escapeHtml(profile.bio || "Ingen presentation har lagts till ännu.")}</p>
+    ${skills.length ? `<div class="skill-list">${skills.map((skill) => `<span>${escapeHtml(skill)}</span>`).join("")}</div>` : ""}`;
+}
+
+async function openPerformerProfile(profileId, focusMessage = false) {
+  if (!profileId || !supabaseClient || !byId("performerProfileModal")) return;
+  const cachedProfile = availablePerformers.find((profile) => profile.id === profileId) || null;
+  selectedDirectProfile = cachedProfile;
+  byId("performerProfileModal").classList.add("show");
+  if (cachedProfile) renderPublicProfile(cachedProfile);
+  else if (byId("publicProfileContent")) byId("publicProfileContent").innerHTML = '<div class="account-meta">Hämtar profilen…</div>';
+
+  const { data, error } = await supabaseClient.rpc("get_contact_profile", { p_profile_id: profileId });
+  const profile = data?.[0] || cachedProfile;
+  if (error || !profile) {
+    if (byId("publicProfileContent")) byId("publicProfileContent").innerHTML = '<div class="notice error">Profilen kunde inte hämtas.</div>';
+    byId("directMessagePanel")?.classList.add("hidden");
+    return;
+  }
+  selectedDirectProfile = profile;
+  renderPublicProfile(profile);
+  const isOwnProfile = currentUser?.id === profile.id;
+  byId("directMessagePanel")?.classList.toggle("hidden", isOwnProfile);
+  if (isOwnProfile) return;
+  if (byId("directMessageHeading")) byId("directMessageHeading").textContent = `Skicka meddelande till ${profile.display_name || "utföraren"}`;
+  if (byId("directMessageIntro")) byId("directMessageIntro").textContent = profile.performer_enabled
+    ? "Fråga om tillgänglighet eller berätta kort vad du behöver hjälp med."
+    : "Fortsätt er privata konversation här.";
+  setNotice("directMessageNotice");
+
+  if (!currentUser) {
+    byId("directMessageForm")?.classList.add("hidden");
+    if (byId("directMessageMessages")) {
+      byId("directMessageMessages").innerHTML = `<div class="chat-empty"><strong>Logga in för att skriva</strong><span>Ditt meddelande blir privat mellan er.</span><button class="btn btn-primary btn-small" type="button" onclick="beginDirectMessage('${profile.id}')">Logga in</button></div>`;
+    }
+    return;
+  }
+
+  byId("directMessageForm")?.classList.remove("hidden");
+  await loadDirectMessages();
+  if (directMessageRefreshTimer) window.clearInterval(directMessageRefreshTimer);
+  directMessageRefreshTimer = window.setInterval(loadDirectMessages, 5000);
+  if (focusMessage) setTimeout(() => byId("directMessageInput")?.focus(), 80);
+}
+
+function beginDirectMessage(profileId) {
+  if (!currentUser || !currentProfile) {
+    pendingDirectProfileId = profileId;
+    pendingDirectFocusMessage = true;
+    closePerformerProfile();
+    openAccountModal("customer");
+    return;
+  }
+  openPerformerProfile(profileId, true);
+}
+
+function closePerformerProfile() {
+  if (directMessageRefreshTimer) window.clearInterval(directMessageRefreshTimer);
+  directMessageRefreshTimer = null;
+  selectedDirectProfile = null;
+  byId("performerProfileModal")?.classList.remove("show");
+  byId("directMessagePanel")?.classList.remove("hidden");
+  byId("directMessageForm")?.classList.remove("hidden");
+  if (byId("directMessageMessages")) byId("directMessageMessages").innerHTML = "";
+  if (byId("directMessageInput")) byId("directMessageInput").value = "";
+  setNotice("directMessageNotice");
+}
+
+async function loadDirectMessages() {
+  const container = byId("directMessageMessages");
+  if (!container || !currentUser || !selectedDirectProfile) return;
+  if (!container.children.length) container.innerHTML = '<div class="account-meta">Hämtar meddelanden…</div>';
+  const otherId = selectedDirectProfile.id;
+  const { data, error } = await supabaseClient
+    .from("direct_messages")
+    .select("id, sender_id, recipient_id, body, created_at")
+    .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${currentUser.id})`)
+    .order("created_at", { ascending: true });
+  if (error) {
+    container.innerHTML = '<div class="notice error">Meddelandena kunde inte hämtas. Databasuppdateringen kan saknas.</div>';
+    return;
+  }
+  const messages = data || [];
+  container.innerHTML = messages.length
+    ? messages.map((message) => {
+        const isOwn = message.sender_id === currentUser.id;
+        const timestamp = new Date(message.created_at).toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        return `<div class="chat-message ${isOwn ? "is-own" : "is-other"}">
+          <div>${escapeHtml(message.body)}</div>
+          <span>${isOwn ? "Du" : escapeHtml(selectedDirectProfile.display_name || "Den andra personen")} · ${escapeHtml(timestamp)}</span>
+        </div>`;
+      }).join("")
+    : '<div class="chat-empty"><strong>Inga meddelanden ännu</strong><span>Skriv en kort fråga för att ta första kontakten.</span></div>';
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendDirectMessage(event) {
+  event.preventDefault();
+  if (!currentUser || !selectedDirectProfile || currentUser.id === selectedDirectProfile.id) return;
+  const input = byId("directMessageInput");
+  const body = input?.value.trim() || "";
+  if (!body) return;
+  setLoading("directMessageSendBtn", true, "Skickar…", "Skicka");
+  setNotice("directMessageNotice");
+  const { error } = await supabaseClient.rpc("send_direct_message", {
+    p_recipient_id: selectedDirectProfile.id,
+    p_body: body
+  });
+  setLoading("directMessageSendBtn", false, "Skickar…", "Skicka");
+  if (error) {
+    setNotice("directMessageNotice", "Meddelandet kunde inte skickas.", "error");
+    return;
+  }
+  input.value = "";
+  await loadDirectMessages();
+  input.focus();
 }
 
 async function loadJobMessages() {
@@ -1031,7 +1303,7 @@ async function loadEarnings() {
   const [jobsResult, reviewsResult] = await Promise.all([
     supabaseClient
       .from("jobs")
-      .select("id, title, agreed_price_sek, budget_sek, completed_at")
+      .select("id, title, agreed_price_sek, budget_sek, price_type, completed_at")
       .eq("performer_id", currentUser.id)
       .eq("status", "completed")
       .order("completed_at", { ascending: false }),
@@ -1046,7 +1318,9 @@ async function loadEarnings() {
   }
   const completedJobs = jobsResult.data || [];
   const ratings = reviewsResult.data || [];
-  const total = completedJobs.reduce((sum, job) => sum + Number(job.agreed_price_sek || job.budget_sek || 0), 0);
+  const total = completedJobs.reduce((sum, job) => (
+    job.price_type === "hourly" ? sum : sum + Number(job.agreed_price_sek || job.budget_sek || 0)
+  ), 0);
   const average = ratings.length
     ? ratings.reduce((sum, review) => sum + Number(review.rating), 0) / ratings.length
     : 0;
@@ -1061,8 +1335,8 @@ async function loadEarnings() {
     byId("earningsList").innerHTML = completedJobs.length
       ? `<strong>Utförda jobb</strong>${completedJobs.map((job) => `
           <div class="earning-row">
-            <span><strong>${escapeHtml(job.title)}</strong><br><span class="account-meta">${new Date(job.completed_at).toLocaleDateString("sv-SE")}</span></span>
-            <strong>${formatCurrency(job.agreed_price_sek || job.budget_sek)}</strong>
+            <span><strong>${escapeHtml(job.title)}</strong><br><span class="account-meta">${new Date(job.completed_at).toLocaleDateString("sv-SE")}${job.price_type === "hourly" ? " · Slutbelopp kräver bekräftade timmar" : ""}</span></span>
+            <strong>${formatCurrency(job.agreed_price_sek || job.budget_sek)}${job.price_type === "hourly" ? "/tim" : ""}</strong>
           </div>`).join("")}`
       : '<div class="notice">När ett jobb markeras som klart visas summan här.</div>';
   }
@@ -1276,8 +1550,12 @@ function renderJobModalPerformers() {
       <div class="job-live-person-avatar">${performer.avatar_path ? `<img src="${escapeHtml(avatarUrl(performer.avatar_path))}" alt="" />` : escapeHtml(initials(performer.display_name))}</div>
       <div class="job-live-person-copy">
         <span class="availability-badge"><span aria-hidden="true"></span>${availabilityLabel(performer.availability_status)}</span>
-        <strong>${escapeHtml(performer.display_name || "Utförare")}</strong>
+        <strong><button class="profile-link-button" type="button" onclick="openPerformerProfile('${performer.id}')">${escapeHtml(performer.display_name || "Utförare")}</button></strong>
         <span>${escapeHtml(performer.service_area || "Område ej angivet")}</span>
+        <div class="job-live-person-actions">
+          <button class="link-button" type="button" onclick="openPerformerProfile('${performer.id}')">Visa profil</button>
+          <button class="link-button" type="button" onclick="beginDirectMessage('${performer.id}')">Skicka meddelande</button>
+        </div>
       </div>
     </div>`).join("");
 }
@@ -1321,7 +1599,7 @@ function renderAvailablePerformers(performers) {
           <div class="performer-avatar">${performer.avatar_path ? `<img src="${escapeHtml(avatarUrl(performer.avatar_path))}" alt="" />` : escapeHtml(initials(performer.display_name))}</div>
           <div>
             <span class="availability-badge"><span aria-hidden="true"></span>${availabilityLabel(performer.availability_status)}</span>
-            <h2>${escapeHtml(performer.display_name || "Utförare")}</h2>
+            <h2><button class="profile-link-button" type="button" onclick="openPerformerProfile('${performer.id}')">${escapeHtml(performer.display_name || "Utförare")}</button></h2>
             <div class="rating-line">${reviewCount ? `${rating.toFixed(1).replace(".", ",")} ★ · ${reviewCount} betyg` : "Ny utförare · inga betyg ännu"}</div>
           </div>
         </div>
@@ -1331,7 +1609,10 @@ function renderAvailablePerformers(performers) {
           <span>✓ ${Number(performer.completed_jobs || 0)} utförda jobb</span>
         </div>
         ${skills.length ? `<div class="skill-list">${skills.map((skill) => `<span>${escapeHtml(skill)}</span>`).join("")}</div>` : ""}
-        <a class="btn btn-primary" href="index.html?newJob=1">Lägg upp jobb</a>
+        <div class="performer-card-actions">
+          <button class="btn btn-light btn-small" type="button" onclick="openPerformerProfile('${performer.id}')">Visa profil</button>
+          <button class="btn btn-primary btn-small" type="button" onclick="beginDirectMessage('${performer.id}')">Meddelande</button>
+        </div>
       </article>`;
   }).join("");
 }
@@ -1358,6 +1639,11 @@ function openApplicationModal(jobId) {
   if (!job) return;
   selectedApplicationJobId = jobId;
   if (byId("applicationJobTitle")) byId("applicationJobTitle").textContent = job.title || job.category;
+  if (byId("applicationPriceLabel")) byId("applicationPriceLabel").textContent = job.price_type === "hourly" ? "Ditt timpris, valfritt" : "Ditt pris, valfritt";
+  if (byId("applicationPrice")) byId("applicationPrice").placeholder = job.price_type === "hourly" ? "Exempel: 250 kr/tim" : "Exempel: 700 kr";
+  if (byId("applicationPriceHelp")) byId("applicationPriceHelp").textContent = job.price_type === "hourly"
+    ? "Beloppet gäller per arbetad timme. Lämna tomt om du accepterar angivet timpris."
+    : "Du kan acceptera budgeten genom att lämna fältet tomt.";
   setNotice("applicationNotice");
   byId("applicationModal")?.classList.add("show");
   setTimeout(() => byId("applicationMessage")?.focus(), 50);
@@ -1430,6 +1716,7 @@ function escapeHtml(value) {
 async function signOut() {
   closeNotificationCenter();
   closeJobChat();
+  closePerformerProfile();
   if (supabaseClient) await supabaseClient.auth.signOut();
   currentUser = null;
   currentProfile = null;
@@ -1465,7 +1752,12 @@ async function initializeAuth() {
   if (byId("publicJobs")) await loadPublicJobs();
   if (byId("availablePerformers")) await loadAvailablePerformers();
   const params = new URLSearchParams(window.location.search);
-  if (params.get("newJob") === "1") {
+  const editJobId = Number(params.get("editJob") || 0);
+  if (editJobId) {
+    pendingEditJobId = editJobId;
+    if (currentUser && currentProfile) await openEditJob(editJobId);
+    else openAccountModal("customer");
+  } else if (params.get("newJob") === "1") {
     pendingJob = true;
     openModal("job");
   }
@@ -1477,6 +1769,7 @@ function attachPageEvents() {
   byId("callbackModal")?.addEventListener("click", function (event) { if (event.target === this) closeCallbackModal(); });
   byId("applicationModal")?.addEventListener("click", function (event) { if (event.target === this) closeApplicationModal(); });
   byId("jobChatModal")?.addEventListener("click", function (event) { if (event.target === this) closeJobChat(); });
+  byId("performerProfileModal")?.addEventListener("click", function (event) { if (event.target === this) closePerformerProfile(); });
   document.addEventListener("click", (event) => {
     const notificationCenter = byId("notificationCenter");
     const notificationButtons = [byId("notificationButton"), byId("accountNotificationButton")].filter(Boolean);
@@ -1486,6 +1779,7 @@ function attachPageEvents() {
   });
   byId("authEmail")?.addEventListener("keydown", (event) => { if (event.key === "Enter") sendLoginCode(); });
   byId("authCode")?.addEventListener("keydown", (event) => { if (event.key === "Enter") verifyLoginCode(); });
+  byId("jobPriceType")?.addEventListener("change", updateJobPriceTypeFields);
   byId("profileAvatarInput")?.addEventListener("change", (event) => {
     const file = event.target.files?.[0];
     if (!file) return;

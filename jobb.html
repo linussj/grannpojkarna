@@ -35,7 +35,7 @@
 
 <aside class="notification-center hidden" id="notificationCenter" aria-label="Notiser">
   <div class="notification-center-head">
-    <div><strong>Notiser</strong><span>Det senaste om dina jobb</span></div>
+    <div><strong>Notiser</strong><span>Det senaste på ditt konto</span></div>
     <button class="link-button" id="markAllNotificationsBtn" type="button" onclick="markAllNotificationsRead()">Markera alla som lästa</button>
   </div>
   <div class="notification-list" id="notificationList">
@@ -189,8 +189,9 @@
         <textarea id="applicationMessage" rows="5" maxlength="1000" placeholder="Berätta kort varför du passar för jobbet och när du kan hjälpa till" required></textarea>
       </div>
       <div class="field full">
-        <label for="applicationPrice">Ditt pris, valfritt</label>
+        <label for="applicationPrice" id="applicationPriceLabel">Ditt pris, valfritt</label>
         <input id="applicationPrice" inputmode="numeric" placeholder="Exempel: 700 kr" />
+        <span class="field-help" id="applicationPriceHelp">Du kan acceptera budgeten genom att lämna fältet tomt.</span>
       </div>
       <div class="field full">
         <button class="btn btn-primary" style="width:100%" type="submit" id="applicationSubmitBtn">Skicka intresseanmälan</button>
@@ -412,6 +413,7 @@
       <div>
         <h3>Jobbchatt</h3>
         <p class="auth-intro" id="jobChatTitle"></p>
+        <p class="chat-participant" id="jobChatParticipant"></p>
       </div>
       <button class="close" type="button" onclick="closeJobChat()" aria-label="Stäng">×</button>
     </div>
@@ -422,6 +424,32 @@
       <button class="btn btn-primary" id="jobChatSendBtn" type="submit">Skicka</button>
     </form>
     <div class="notice hidden" id="jobChatNotice" role="status"></div>
+  </div>
+</div>
+
+<div class="modal profile-public-modal" id="performerProfileModal">
+  <div class="dialog public-profile-dialog">
+    <div class="dialog-top">
+      <div>
+        <span class="eyebrow" id="publicProfileEyebrow">Utförarprofil</span>
+        <h3 id="publicProfileTitle">Utförare</h3>
+      </div>
+      <button class="close" type="button" onclick="closePerformerProfile()" aria-label="Stäng">×</button>
+    </div>
+    <div id="publicProfileContent" class="public-profile-content"></div>
+    <section class="direct-message-panel" id="directMessagePanel">
+      <div>
+        <h4 id="directMessageHeading">Skicka meddelande</h4>
+        <p class="account-meta" id="directMessageIntro">Fråga om tillgänglighet eller berätta kort vad du behöver hjälp med.</p>
+      </div>
+      <div class="chat-messages direct-message-list" id="directMessageMessages" aria-live="polite"></div>
+      <form class="chat-form" id="directMessageForm" onsubmit="sendDirectMessage(event)">
+        <label class="visually-hidden" for="directMessageInput">Skriv ett meddelande</label>
+        <textarea id="directMessageInput" rows="2" maxlength="2000" placeholder="Hej! Jag behöver hjälp med…" required></textarea>
+        <button class="btn btn-primary" id="directMessageSendBtn" type="submit">Skicka</button>
+      </form>
+      <div class="notice hidden" id="directMessageNotice" role="status"></div>
+    </section>
   </div>
 </div>
 

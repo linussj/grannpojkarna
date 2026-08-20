@@ -175,6 +175,7 @@ footer{padding:44px 0 60px;color:var(--muted)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
 .field{display:grid;gap:7px}
 .field.full{grid-column:1/-1}
+.field-help{font-size:.78rem;color:var(--muted);line-height:1.4}
 label{font-weight:800;font-size:.92rem}
 input,textarea,select{width:100%;border:1px solid var(--line);border-radius:12px;padding:13px 14px;outline:none;background:white;color:var(--ink)}
 input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3px rgba(47,107,79,.09)}
@@ -285,6 +286,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 /* Privat chatt för accepterade jobb */
 .chat-modal{z-index:55}
 .chat-dialog{max-width:680px;display:grid;grid-template-rows:auto minmax(260px,48vh) auto auto;gap:15px}
+.chat-participant{margin:3px 0 0;color:var(--brand-dark);font-size:.84rem;font-weight:850}
 .chat-messages{display:flex;flex-direction:column;gap:9px;min-height:260px;max-height:48vh;overflow:auto;padding:16px;border:1px solid var(--line);border-radius:18px;background:#f5f8f6}
 .chat-message{max-width:78%;display:grid;gap:5px;padding:10px 13px;border-radius:16px;background:white;border:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.is-own{align-self:flex-end;background:var(--brand);border-color:var(--brand);color:white;border-bottom-right-radius:5px}
@@ -295,6 +297,29 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .chat-empty strong{color:var(--ink)}
 .chat-form{display:grid;grid-template-columns:1fr auto;gap:9px;align-items:end}
 .chat-form textarea{resize:vertical;min-height:54px;max-height:150px}
+
+/* Offentlig utförarprofil och direktmeddelanden */
+.profile-public-modal{z-index:57}
+.public-profile-dialog{max-width:720px;display:grid;gap:18px}
+.public-profile-content{display:grid;gap:15px}
+.public-profile-hero{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
+.public-profile-avatar{width:82px;height:82px;border-radius:24px;background:var(--brand-soft);display:grid;place-items:center;overflow:hidden;color:var(--brand-dark);font-size:1.35rem;font-weight:900}
+.public-profile-avatar img{width:100%;height:100%;object-fit:cover}
+.public-profile-summary{display:grid;gap:5px}
+.public-profile-summary h4{margin:0;font-size:1.35rem}
+.public-profile-facts{display:flex;gap:8px 16px;flex-wrap:wrap;color:var(--muted);font-size:.84rem;font-weight:750}
+.public-profile-bio{margin:0;color:var(--muted);line-height:1.65;white-space:pre-wrap}
+.direct-message-panel{display:grid;gap:12px;padding-top:17px;border-top:1px solid var(--line)}
+.direct-message-panel h4{margin:0 0 2px;font-size:1.08rem}
+.direct-message-list{min-height:150px;max-height:260px}
+.performer-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}
+.performer-card-actions .btn{width:100%}
+.job-live-person{cursor:pointer}
+.job-live-person:hover{background:#f2f7f4}
+.job-live-person-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.job-live-person-actions .link-button{font-size:.72rem}
+.profile-link-button{border:0;background:none;padding:0;color:inherit;font:inherit;font-weight:inherit;cursor:pointer;text-align:left}
+.profile-link-button:hover{text-decoration:underline}
 
 /* Jobbsidan */
 .jobs-hero{background:linear-gradient(135deg,var(--cream),#fff);padding:58px 0 42px}
@@ -343,7 +368,8 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .availability-disclaimer{margin:14px 0 0;color:var(--muted);font-size:.8rem}
 
 @media(max-width:1000px){
-  .job-live-panel{display:none}
+  #modal{align-items:center;justify-content:flex-start;flex-direction:column}
+  .job-live-panel{display:block;width:100%;max-width:620px;max-height:none;align-self:auto}
 }
 @media(max-width:900px){
   .navlinks{display:none}
@@ -395,6 +421,11 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .chat-form{grid-template-columns:1fr}
   .chat-form .btn{width:100%}
   .chat-message{max-width:88%}
+  .public-profile-hero{grid-template-columns:1fr;text-align:center}
+  .public-profile-avatar{margin:0 auto}
+  .public-profile-summary .availability-badge{justify-self:center}
+  .public-profile-facts{justify-content:center}
+  .performer-card-actions{grid-template-columns:1fr}
   .jobs-hero-grid{grid-template-columns:1fr}
   .jobs-hero{padding:42px 0 32px}
   .jobs-hero h1{font-size:3rem}

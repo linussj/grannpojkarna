@@ -43,6 +43,7 @@ function hideAccountSteps() {
     byId(id)?.classList.add("hidden");
   });
   byId("accountLogoutBtn")?.classList.add("hidden");
+  byId("accountNotificationButton")?.classList.add("hidden");
 }
 
 function showEmailStep() {
@@ -88,6 +89,7 @@ async function showAccountStep() {
   hideAccountSteps();
   byId("accountStep")?.classList.remove("hidden");
   byId("accountLogoutBtn")?.classList.remove("hidden");
+  byId("accountNotificationButton")?.classList.remove("hidden");
   if (byId("accountTitle")) byId("accountTitle").textContent = "Mitt konto";
   if (byId("accountName")) byId("accountName").textContent = currentProfile?.display_name || "Mitt konto";
   if (byId("accountEmail")) byId("accountEmail").textContent = currentUser?.email || "";
@@ -285,7 +287,7 @@ function showAccountTab(tabName) {
     byId(buttonId)?.setAttribute("aria-selected", String(isActive));
     byId(panelId)?.classList.toggle("hidden", !isActive);
   });
-  const showAvailability = requestedTab === "profile" && Boolean(currentProfile?.performer_enabled);
+  const showAvailability = Boolean(currentProfile?.performer_enabled);
   byId("availabilityMenuWrap")?.classList.toggle("hidden", !showAvailability);
   if (!showAvailability) closeAvailabilityMenu();
 }
@@ -384,9 +386,13 @@ function closeAvailabilityMenu() {
 
 function notificationIcon(type) {
   return ({
+    job_match: "✨",
+    application_sent: "↗",
     job_application: "🙋",
     job_accepted: "✓",
+    application_declined: "–",
     job_started: "▶",
+    job_completed: "✓",
     payout_ready: "kr",
     new_message: "💬"
   })[type] || "•";
@@ -394,11 +400,15 @@ function notificationIcon(type) {
 
 function updateNotificationBadge() {
   const unreadCount = notifications.filter((notification) => !notification.read_at).length;
-  const badge = byId("notificationBadge");
-  if (!badge) return;
-  badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
-  badge.classList.toggle("hidden", unreadCount === 0);
-  byId("notificationButton")?.setAttribute("aria-label", unreadCount ? `Öppna notiser, ${unreadCount} olästa` : "Öppna notiser");
+  ["notificationBadge", "accountNotificationBadge"].forEach((id) => {
+    const badge = byId(id);
+    if (!badge) return;
+    badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+    badge.classList.toggle("hidden", unreadCount === 0);
+  });
+  ["notificationButton", "accountNotificationButton"].forEach((id) => {
+    byId(id)?.setAttribute("aria-label", unreadCount ? `Öppna notiser, ${unreadCount} olästa` : "Öppna notiser");
+  });
 }
 
 function renderNotifications() {
@@ -438,17 +448,16 @@ async function loadNotifications() {
 async function toggleNotificationCenter() {
   if (!currentUser) return;
   const center = byId("notificationCenter");
-  const button = byId("notificationButton");
-  if (!center || !button) return;
+  if (!center) return;
   const willOpen = center.classList.contains("hidden");
   center.classList.toggle("hidden", !willOpen);
-  button.setAttribute("aria-expanded", String(willOpen));
+  ["notificationButton", "accountNotificationButton"].forEach((id) => byId(id)?.setAttribute("aria-expanded", String(willOpen)));
   if (willOpen) await loadNotifications();
 }
 
 function closeNotificationCenter() {
   byId("notificationCenter")?.classList.add("hidden");
-  byId("notificationButton")?.setAttribute("aria-expanded", "false");
+  ["notificationButton", "accountNotificationButton"].forEach((id) => byId(id)?.setAttribute("aria-expanded", "false"));
 }
 
 async function markNotificationRead(notificationId) {
@@ -599,6 +608,7 @@ function openModal(type) {
     return;
   }
   byId("modal").classList.add("show");
+  renderJobModalPerformers();
   setNotice("jobNotice");
 }
 
@@ -1250,6 +1260,26 @@ async function loadAvailablePerformers() {
   availablePerformers = data || [];
   byId("availabilitySection")?.classList.toggle("hidden", !availablePerformers.length);
   applyPerformerFilters();
+  renderJobModalPerformers();
+}
+
+function renderJobModalPerformers() {
+  const container = byId("jobModalPerformers");
+  if (!container) return;
+  const performers = availablePerformers.slice(0, 5);
+  if (!performers.length) {
+    container.innerHTML = '<div class="account-meta">Ingen har markerat sig som tillgänglig just nu. Jobbet visas ändå för alla utförare när det publiceras.</div>';
+    return;
+  }
+  container.innerHTML = performers.map((performer) => `
+    <div class="job-live-person">
+      <div class="job-live-person-avatar">${performer.avatar_path ? `<img src="${escapeHtml(avatarUrl(performer.avatar_path))}" alt="" />` : escapeHtml(initials(performer.display_name))}</div>
+      <div class="job-live-person-copy">
+        <span class="availability-badge"><span aria-hidden="true"></span>${availabilityLabel(performer.availability_status)}</span>
+        <strong>${escapeHtml(performer.display_name || "Utförare")}</strong>
+        <span>${escapeHtml(performer.service_area || "Område ej angivet")}</span>
+      </div>
+    </div>`).join("");
 }
 
 function applyPerformerFilters() {
@@ -1362,6 +1392,7 @@ async function submitApplication(event) {
   }
   byId("applicationForm").reset();
   setNotice("applicationNotice", "Din intresseanmälan är skickad!", "success");
+  await loadNotifications();
 }
 
 function formatPrice(job) {
@@ -1448,8 +1479,8 @@ function attachPageEvents() {
   byId("jobChatModal")?.addEventListener("click", function (event) { if (event.target === this) closeJobChat(); });
   document.addEventListener("click", (event) => {
     const notificationCenter = byId("notificationCenter");
-    const notificationButton = byId("notificationButton");
-    if (notificationCenter && notificationButton && !notificationCenter.contains(event.target) && !notificationButton.contains(event.target)) closeNotificationCenter();
+    const notificationButtons = [byId("notificationButton"), byId("accountNotificationButton")].filter(Boolean);
+    if (notificationCenter && !notificationCenter.contains(event.target) && !notificationButtons.some((button) => button.contains(event.target))) closeNotificationCenter();
     const availabilityWrap = byId("availabilityMenuWrap");
     if (availabilityWrap && !availabilityWrap.contains(event.target)) closeAvailabilityMenu();
   });

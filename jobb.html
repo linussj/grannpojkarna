@@ -217,26 +217,30 @@
       </div>
     </div>
 
-    <div id="authEmailStep" class="auth-stack">
-      <p class="auth-intro">Ange din mejladress så skickar vi en sexsiffrig engångskod.</p>
+    <form id="authEmailStep" class="auth-stack" onsubmit="sendLoginCode(event)">
+      <p class="auth-intro">Ange din mejladress så skickar vi en sexsiffrig engångskod. Du förblir inloggad på den här enheten tills du själv loggar ut.</p>
       <div class="field">
         <label for="authEmail">Mejladress</label>
-        <input id="authEmail" type="email" autocomplete="email" placeholder="du@exempel.se" required />
+        <input id="authEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" enterkeyhint="send" placeholder="du@exempel.se" required />
       </div>
-      <button class="btn btn-primary" id="sendCodeBtn" onclick="sendLoginCode()">Skicka kod</button>
+      <button class="btn btn-primary" id="sendCodeBtn" type="submit">Skicka kod</button>
       <div class="notice hidden" id="authEmailNotice" role="status"></div>
-    </div>
+    </form>
 
-    <div id="authCodeStep" class="auth-stack hidden">
+    <form id="authCodeStep" class="auth-stack hidden" onsubmit="verifyLoginCode(event)">
       <p class="auth-intro">Vi har skickat en kod till <strong id="codeEmail"></strong>.</p>
       <div class="field">
         <label for="authCode">Sexsiffrig kod</label>
-        <input id="authCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required />
+        <input id="authCode" name="one-time-code" type="text" inputmode="numeric" autocomplete="one-time-code" autocapitalize="none" pattern="[0-9]{6}" maxlength="6" enterkeyhint="done" placeholder="123456" required />
       </div>
-      <button class="btn btn-primary" id="verifyCodeBtn" onclick="verifyLoginCode()">Verifiera och fortsätt</button>
-      <button class="link-button" onclick="showEmailStep()">Använd en annan mejladress</button>
+      <button class="btn btn-primary" id="verifyCodeBtn" type="submit">Verifiera och fortsätt</button>
+      <div class="auth-code-actions">
+        <button class="link-button" id="resendCodeBtn" type="button" onclick="resendLoginCode()">Skicka ny kod</button>
+        <button class="link-button" type="button" onclick="showEmailStep(true)">Använd en annan mejladress</button>
+      </div>
+      <div class="account-meta" id="resendCodeHelp">Koden kan fyllas i automatiskt av din mobil eller webbläsare.</div>
       <div class="notice hidden" id="authCodeNotice" role="status"></div>
-    </div>
+    </form>
 
     <div id="profileStep" class="auth-stack hidden">
       <p class="auth-intro">Skapa ett konto. Du kan både lägga upp och utföra jobb.</p>

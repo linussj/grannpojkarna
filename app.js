@@ -1,8 +1,18 @@
 const appConfig = window.GRANNPOJKARNA_CONFIG || {};
 const hasBackendConfig = Boolean(appConfig.supabaseUrl && appConfig.supabasePublishableKey);
 const supabaseClient = hasBackendConfig && window.supabase
-  ? window.supabase.createClient(appConfig.supabaseUrl, appConfig.supabasePublishableKey)
+  ? window.supabase.createClient(appConfig.supabaseUrl, appConfig.supabasePublishableKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    })
   : null;
+
+const pendingAuthStorageKey = "grannpojkarna.pending-auth.v1";
+const pendingAuthLifetimeMs = 15 * 60 * 1000;
+const authResendCooldownMs = 60 * 1000;
 
 let currentUser = null;
 let currentProfile = null;
@@ -25,10 +35,102 @@ let pendingDirectFocusMessage = false;
 let directMessageRefreshTimer = null;
 let notifications = [];
 let notificationRefreshTimer = null;
+let authResendTimer = null;
+let authAutoSubmitTimer = null;
+let authReady = false;
 
 const profileFields = "id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek, availability_status, available_until";
 
 const byId = (id) => document.getElementById(id);
+
+function readPendingAuthFlow() {
+  try {
+    const raw = window.localStorage.getItem(pendingAuthStorageKey);
+    if (!raw) return null;
+    const state = JSON.parse(raw);
+    const valid = state
+      && typeof state.email === "string"
+      && state.email.includes("@")
+      && Number(state.expiresAt) > Date.now();
+    if (!valid) {
+      window.localStorage.removeItem(pendingAuthStorageKey);
+      return null;
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function savePendingAuthFlow(email, sentAt = Date.now(), dismissed = false) {
+  const state = {
+    email: String(email || "").trim().toLowerCase(),
+    sentAt,
+    expiresAt: sentAt + pendingAuthLifetimeMs,
+    dismissed
+  };
+  try {
+    window.localStorage.setItem(pendingAuthStorageKey, JSON.stringify(state));
+  } catch {
+    // Inloggningen fungerar fortfarande om webbläsaren blockerar lokal lagring.
+  }
+  return state;
+}
+
+function setPendingAuthDismissed(dismissed) {
+  const state = readPendingAuthFlow();
+  if (!state) return;
+  try {
+    window.localStorage.setItem(pendingAuthStorageKey, JSON.stringify({ ...state, dismissed }));
+  } catch {
+    // Ingen åtgärd krävs om webbläsaren blockerar lokal lagring.
+  }
+}
+
+function clearPendingAuthFlow() {
+  if (authResendTimer) window.clearInterval(authResendTimer);
+  authResendTimer = null;
+  try {
+    window.localStorage.removeItem(pendingAuthStorageKey);
+  } catch {
+    // Ingen åtgärd krävs om webbläsaren blockerar lokal lagring.
+  }
+}
+
+function updateResendCodeState() {
+  const button = byId("resendCodeBtn");
+  const help = byId("resendCodeHelp");
+  const state = readPendingAuthFlow();
+  if (!button || !help || !state) return 0;
+  const remainingSeconds = Math.max(0, Math.ceil((state.sentAt + authResendCooldownMs - Date.now()) / 1000));
+  button.disabled = remainingSeconds > 0;
+  button.textContent = remainingSeconds > 0 ? `Skicka ny kod (${remainingSeconds} s)` : "Skicka ny kod";
+  help.textContent = remainingSeconds > 0
+    ? "Koden kan fyllas i automatiskt. Du kan begära en ny när väntetiden är slut."
+    : "Fick du ingen kod? Kontrollera skräpposten eller skicka en ny här.";
+  return remainingSeconds;
+}
+
+function startResendCodeTimer() {
+  if (authResendTimer) window.clearInterval(authResendTimer);
+  authResendTimer = null;
+  if (updateResendCodeState() <= 0) return;
+  authResendTimer = window.setInterval(() => {
+    if (updateResendCodeState() <= 0) {
+      window.clearInterval(authResendTimer);
+      authResendTimer = null;
+    }
+  }, 1000);
+}
+
+function restorePendingLogin(options = {}) {
+  if (currentUser) return false;
+  const state = readPendingAuthFlow();
+  if (!state || (state.dismissed && !options.ignoreDismissed)) return false;
+  if (options.openModal !== false) byId("accountModal")?.classList.add("show");
+  showCodeStep(state.email, { persist: false });
+  return true;
+}
 
 function setNotice(id, message = "", type = "") {
   const element = byId(id);
@@ -52,19 +154,25 @@ function hideAccountSteps() {
   byId("accountNotificationButton")?.classList.add("hidden");
 }
 
-function showEmailStep() {
+function showEmailStep(resetPending = false) {
+  if (resetPending) clearPendingAuthFlow();
   hideAccountSteps();
   byId("authEmailStep")?.classList.remove("hidden");
   if (byId("accountTitle")) byId("accountTitle").textContent = "Logga in eller skapa konto";
+  if (resetPending && byId("authCode")) byId("authCode").value = "";
   setNotice("authEmailNotice");
+  setTimeout(() => byId("authEmail")?.focus(), 50);
 }
 
-function showCodeStep(email) {
+function showCodeStep(email, options = {}) {
+  if (options.persist !== false) savePendingAuthFlow(email);
   hideAccountSteps();
   byId("authCodeStep")?.classList.remove("hidden");
+  if (byId("authEmail")) byId("authEmail").value = email;
   if (byId("codeEmail")) byId("codeEmail").textContent = email;
   if (byId("accountTitle")) byId("accountTitle").textContent = "Ange din kod";
-  byId("authCode")?.focus();
+  startResendCodeTimer();
+  setTimeout(() => byId("authCode")?.focus(), 50);
 }
 
 function showProfileStep() {
@@ -127,18 +235,20 @@ function openAccountModal(preselectedRole = "customer") {
   } else if (currentUser) {
     showProfileStep();
   } else {
-    showEmailStep();
-    setTimeout(() => byId("authEmail")?.focus(), 50);
+    setPendingAuthDismissed(false);
+    if (!restorePendingLogin({ openModal: false, ignoreDismissed: true })) showEmailStep();
   }
 }
 
 function closeAccountModal() {
   closeAvailabilityMenu();
   closeJobChat();
+  if (!currentUser && !byId("authCodeStep")?.classList.contains("hidden")) setPendingAuthDismissed(true);
   byId("accountModal")?.classList.remove("show");
 }
 
-async function sendLoginCode() {
+async function sendLoginCode(event) {
+  event?.preventDefault();
   const email = byId("authEmail")?.value.trim().toLowerCase() || "";
   if (!email || !email.includes("@")) {
     setNotice("authEmailNotice", "Ange en giltig mejladress.", "error");
@@ -159,11 +269,41 @@ async function sendLoginCode() {
     setNotice("authEmailNotice", "Koden kunde inte skickas. Försök igen om en stund.", "error");
     return;
   }
-  showCodeStep(email);
+  savePendingAuthFlow(email);
+  if (byId("authCode")) byId("authCode").value = "";
+  showCodeStep(email, { persist: false });
 }
 
-async function verifyLoginCode() {
-  const email = byId("authEmail")?.value.trim().toLowerCase() || "";
+async function resendLoginCode() {
+  const state = readPendingAuthFlow();
+  if (!state || updateResendCodeState() > 0 || !supabaseClient) return;
+  const button = byId("resendCodeBtn");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Skickar…";
+  }
+  setNotice("authCodeNotice");
+  const { error } = await supabaseClient.auth.signInWithOtp({
+    email: state.email,
+    options: { shouldCreateUser: true }
+  });
+  if (error) {
+    savePendingAuthFlow(state.email);
+    startResendCodeTimer();
+    setNotice("authCodeNotice", "En ny kod kunde inte skickas ännu. Vänta en liten stund och försök igen.", "error");
+    return;
+  }
+  savePendingAuthFlow(state.email);
+  if (byId("authCode")) byId("authCode").value = "";
+  startResendCodeTimer();
+  setNotice("authCodeNotice", "En ny kod har skickats.", "success");
+  setTimeout(() => byId("authCode")?.focus(), 50);
+}
+
+async function verifyLoginCode(event) {
+  event?.preventDefault();
+  if (byId("verifyCodeBtn")?.disabled) return;
+  const email = readPendingAuthFlow()?.email || byId("authEmail")?.value.trim().toLowerCase() || "";
   const token = byId("authCode")?.value.trim() || "";
   if (!/^\d{6}$/.test(token)) {
     setNotice("authCodeNotice", "Koden ska bestå av sex siffror.", "error");
@@ -177,6 +317,7 @@ async function verifyLoginCode() {
     setNotice("authCodeNotice", "Koden är felaktig eller har gått ut.", "error");
     return;
   }
+  clearPendingAuthFlow();
   currentUser = data.user;
   await loadProfile();
   if (!currentProfile) {
@@ -1717,6 +1858,7 @@ async function signOut() {
   closeNotificationCenter();
   closeJobChat();
   closePerformerProfile();
+  clearPendingAuthFlow();
   if (supabaseClient) await supabaseClient.auth.signOut();
   currentUser = null;
   currentProfile = null;
@@ -1734,12 +1876,18 @@ async function initializeAuth() {
   if (supabaseClient) {
     const { data } = await supabaseClient.auth.getSession();
     currentUser = data.session?.user || null;
-    if (currentUser) await loadProfile();
+    if (currentUser) {
+      clearPendingAuthFlow();
+      await loadProfile();
+    }
     updateAccountButton();
     startNotificationRefresh();
     supabaseClient.auth.onAuthStateChange(async (_event, session) => {
       currentUser = session?.user || null;
-      if (currentUser) await loadProfile();
+      if (currentUser) {
+        clearPendingAuthFlow();
+        await loadProfile();
+      }
       else {
         currentProfile = null;
         notifications = [];
@@ -1751,6 +1899,7 @@ async function initializeAuth() {
   }
   if (byId("publicJobs")) await loadPublicJobs();
   if (byId("availablePerformers")) await loadAvailablePerformers();
+  authReady = true;
   const params = new URLSearchParams(window.location.search);
   const editJobId = Number(params.get("editJob") || 0);
   if (editJobId) {
@@ -1760,6 +1909,8 @@ async function initializeAuth() {
   } else if (params.get("newJob") === "1") {
     pendingJob = true;
     openModal("job");
+  } else if (!currentUser) {
+    restorePendingLogin();
   }
 }
 
@@ -1777,8 +1928,22 @@ function attachPageEvents() {
     const availabilityWrap = byId("availabilityMenuWrap");
     if (availabilityWrap && !availabilityWrap.contains(event.target)) closeAvailabilityMenu();
   });
-  byId("authEmail")?.addEventListener("keydown", (event) => { if (event.key === "Enter") sendLoginCode(); });
-  byId("authCode")?.addEventListener("keydown", (event) => { if (event.key === "Enter") verifyLoginCode(); });
+  byId("authCode")?.addEventListener("input", (event) => {
+    const digits = event.target.value.replace(/\D/g, "").slice(0, 6);
+    if (event.target.value !== digits) event.target.value = digits;
+    if (authAutoSubmitTimer) window.clearTimeout(authAutoSubmitTimer);
+    if (digits.length === 6) {
+      authAutoSubmitTimer = window.setTimeout(() => {
+        if (byId("authCode")?.value.length === 6 && !byId("verifyCodeBtn")?.disabled) verifyLoginCode();
+      }, 250);
+    }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (authReady && document.visibilityState === "visible" && !currentUser) restorePendingLogin();
+  });
+  window.addEventListener("pageshow", () => {
+    if (authReady && !currentUser) restorePendingLogin();
+  });
   byId("jobPriceType")?.addEventListener("change", updateJobPriceTypeFields);
   byId("profileAvatarInput")?.addEventListener("change", (event) => {
     const file = event.target.files?.[0];

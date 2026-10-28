@@ -34,6 +34,8 @@ let pendingDirectProfileId = null;
 let pendingDirectFocusMessage = false;
 let directMessageRefreshTimer = null;
 let accountMessageConversations = [];
+let selectedAccountConversationIndex = null;
+let accountConversationRefreshTimer = null;
 let notifications = [];
 let notificationRefreshTimer = null;
 let authResendTimer = null;
@@ -43,6 +45,20 @@ let authReady = false;
 const profileFields = "id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek, availability_status, available_until";
 
 const byId = (id) => document.getElementById(id);
+const isAccountPage = () => document.body.dataset.page === "account";
+
+function hasPendingAccountAction() {
+  return Boolean(pendingJob || pendingEditJobId || pendingApplicationJobId || pendingDirectProfileId);
+}
+
+function handleAccountButton() {
+  if (currentUser && currentProfile) {
+    if (isAccountPage()) window.scrollTo({ top: 0, behavior: "smooth" });
+    else window.location.href = "konto.html";
+    return;
+  }
+  openAccountModal("customer");
+}
 
 function readPendingAuthFlow() {
   try {
@@ -191,6 +207,7 @@ function showPerformerStep() {
     openAccountModal("performer");
     return;
   }
+  byId("accountModal")?.classList.add("show");
   hideAccountSteps();
   byId("performerStep")?.classList.remove("hidden");
   if (byId("accountTitle")) byId("accountTitle").textContent = "Din utförarprofil";
@@ -201,10 +218,15 @@ function showPerformerStep() {
 }
 
 async function showAccountStep() {
+  if (!isAccountPage()) {
+    if (!hasPendingAccountAction()) window.location.href = "konto.html";
+    return;
+  }
   hideAccountSteps();
-  byId("accountStep")?.classList.remove("hidden");
-  byId("accountLogoutBtn")?.classList.remove("hidden");
-  byId("accountNotificationButton")?.classList.remove("hidden");
+  byId("accountModal")?.classList.remove("show");
+  byId("accountPageLoading")?.classList.add("hidden");
+  byId("accountPageGuest")?.classList.add("hidden");
+  byId("accountPageContent")?.classList.remove("hidden");
   if (byId("accountTitle")) byId("accountTitle").textContent = "Mitt konto";
   if (byId("accountName")) byId("accountName").textContent = currentProfile?.display_name || "Mitt konto";
   if (byId("accountEmail")) byId("accountEmail").textContent = currentUser?.email || "";
@@ -215,7 +237,8 @@ async function showAccountStep() {
   byId("enablePerformerBtn")?.classList.toggle("hidden", Boolean(currentProfile?.performer_enabled));
   byId("accountTabEarnings")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
   updateProfilePanel();
-  showAccountTab("jobs");
+  const requestedTab = window.location.hash.replace("#", "");
+  showAccountTab(["jobs", "messages", "profile", "earnings"].includes(requestedTab) ? requestedTab : "jobs");
   await Promise.all([
     loadMyJobs(),
     currentProfile?.performer_enabled ? loadEarnings() : Promise.resolve()
@@ -224,18 +247,23 @@ async function showAccountStep() {
 
 function openAccountModal(preselectedRole = "customer") {
   roleHint = preselectedRole;
-  byId("accountModal")?.classList.add("show");
   if (!hasBackendConfig) {
+    byId("accountModal")?.classList.add("show");
     showEmailStep();
     setNotice("authEmailNotice", "Kontosystemet är ännu inte anslutet till databasen.", "error");
     return;
   }
   if (currentUser && currentProfile) {
-    if (preselectedRole === "performer" && !currentProfile.performer_enabled) showPerformerStep();
+    if (preselectedRole === "performer" && !currentProfile.performer_enabled) {
+      byId("accountModal")?.classList.add("show");
+      showPerformerStep();
+    }
     else showAccountStep();
   } else if (currentUser) {
+    byId("accountModal")?.classList.add("show");
     showProfileStep();
   } else {
+    byId("accountModal")?.classList.add("show");
     setPendingAuthDismissed(false);
     if (!restorePendingLogin({ openModal: false, ignoreDismissed: true })) showEmailStep();
   }
@@ -439,6 +467,13 @@ function showAccountTab(tabName) {
   const showAvailability = Boolean(currentProfile?.performer_enabled);
   byId("availabilityMenuWrap")?.classList.toggle("hidden", !showAvailability);
   if (!showAvailability) closeAvailabilityMenu();
+  if (isAccountPage() && window.location.hash !== `#${requestedTab}`) {
+    window.history.replaceState(null, "", `#${requestedTab}`);
+  }
+  if (requestedTab !== "messages" && accountConversationRefreshTimer) {
+    window.clearInterval(accountConversationRefreshTimer);
+    accountConversationRefreshTimer = null;
+  }
   if (requestedTab === "messages") loadAccountMessages();
 }
 
@@ -474,7 +509,8 @@ function renderMessageConversation(conversation, index) {
   const context = conversation.kind === "job"
     ? `<span class="message-conversation-context">${escapeHtml(conversation.jobTitle)}</span>`
     : '<span class="message-conversation-context">Direktmeddelande</span>';
-  return `<button class="message-conversation" type="button" onclick="openAccountConversation(${index})">
+  const selectedClass = Number(index) === Number(selectedAccountConversationIndex) ? " is-selected" : "";
+  return `<button class="message-conversation${selectedClass}" data-conversation-index="${index}" type="button" onclick="openAccountConversation(${index})">
     <span class="message-conversation-avatar" aria-hidden="true">${avatar}</span>
     <span class="message-conversation-body">
       <span class="message-conversation-head">
@@ -592,17 +628,116 @@ async function loadAccountMessages() {
     };
   }).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
+  const previous = accountMessageConversations[Number(selectedAccountConversationIndex)];
+  const previousKey = previous ? `${previous.kind}:${previous.kind === "job" ? previous.jobId : previous.profileId}` : null;
   accountMessageConversations = [...jobConversations, ...directConversations];
+  selectedAccountConversationIndex = previousKey
+    ? accountMessageConversations.findIndex((conversation) => `${conversation.kind}:${conversation.kind === "job" ? conversation.jobId : conversation.profileId}` === previousKey)
+    : accountMessageConversations.length ? 0 : null;
+  if (selectedAccountConversationIndex < 0) selectedAccountConversationIndex = accountMessageConversations.length ? 0 : null;
+  if (byId("accountMessageNavCount")) byId("accountMessageNavCount").textContent = String(accountMessageConversations.length);
   container.removeAttribute("aria-busy");
   container.innerHTML = [
     renderMessageGroup("Jobbkonversationer", "Samtal grupperade efter uppdrag", jobConversations, "När ett jobb har fått en utförare visas chatten här."),
     renderMessageGroup("Direktmeddelanden", "Privata samtal utanför ett specifikt jobb", directConversations, "Dina direktmeddelanden till andra användare visas här.")
   ].join("");
+  const messagesPanelVisible = isAccountPage() && !byId("accountMessagesPanel")?.classList.contains("hidden");
+  if (messagesPanelVisible && selectedAccountConversationIndex !== null) await openAccountConversation(selectedAccountConversationIndex, { scroll: false });
+  else if (messagesPanelVisible) renderEmptyAccountConversation();
 }
 
-async function openAccountConversation(index) {
+function renderEmptyAccountConversation() {
+  if (byId("accountConversationTitle")) byId("accountConversationTitle").textContent = "Välj en konversation";
+  if (byId("accountConversationContext")) byId("accountConversationContext").textContent = "Dina meddelanden visas här.";
+  if (byId("accountConversationMessages")) {
+    byId("accountConversationMessages").innerHTML = '<div class="chat-empty"><strong>Ingen konversation vald</strong><span>Välj ett samtal i listan för att läsa och svara.</span></div>';
+  }
+  byId("accountConversationForm")?.classList.add("hidden");
+  setNotice("accountConversationNotice");
+}
+
+async function loadAccountConversationMessages() {
+  const conversation = accountMessageConversations[Number(selectedAccountConversationIndex)];
+  const container = byId("accountConversationMessages");
+  if (!conversation || !container || !currentUser) return;
+  if (!container.children.length) container.innerHTML = '<div class="account-meta">Hämtar meddelanden…</div>';
+  const result = conversation.kind === "job"
+    ? await supabaseClient
+        .from("job_messages")
+        .select("id, sender_id, body, created_at")
+        .eq("job_id", conversation.jobId)
+        .order("created_at", { ascending: true })
+    : await supabaseClient
+        .from("direct_messages")
+        .select("id, sender_id, recipient_id, body, created_at")
+        .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${conversation.profileId}),and(sender_id.eq.${conversation.profileId},recipient_id.eq.${currentUser.id})`)
+        .order("created_at", { ascending: true });
+  if (result.error) {
+    container.innerHTML = '<div class="notice error">Konversationen kunde inte hämtas.</div>';
+    return;
+  }
+  const messages = result.data || [];
+  container.innerHTML = messages.length
+    ? messages.map((message) => {
+        const isOwn = message.sender_id === currentUser.id;
+        const timestamp = new Date(message.created_at).toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        return `<div class="chat-message ${isOwn ? "is-own" : "is-other"}">
+          <div>${escapeHtml(message.body)}</div>
+          <span>${isOwn ? "Du" : escapeHtml(conversation.name)} · ${escapeHtml(timestamp)}</span>
+        </div>`;
+      }).join("")
+    : `<div class="chat-empty"><strong>Inga meddelanden ännu</strong><span>${conversation.kind === "job" ? "Börja planera jobbet här." : "Skriv en kort fråga för att starta samtalet."}</span></div>`;
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendAccountConversationMessage(event) {
+  event.preventDefault();
+  const conversation = accountMessageConversations[Number(selectedAccountConversationIndex)];
+  const input = byId("accountConversationInput");
+  const body = input?.value.trim() || "";
+  if (!conversation || !body || !currentUser) return;
+  setLoading("accountConversationSendBtn", true, "Skickar…", "Skicka");
+  setNotice("accountConversationNotice");
+  const result = conversation.kind === "job"
+    ? await supabaseClient.from("job_messages").insert({ job_id: conversation.jobId, sender_id: currentUser.id, body })
+    : await supabaseClient.rpc("send_direct_message", { p_recipient_id: conversation.profileId, p_body: body });
+  setLoading("accountConversationSendBtn", false, "Skickar…", "Skicka");
+  if (result.error) {
+    setNotice("accountConversationNotice", "Meddelandet kunde inte skickas.", "error");
+    return;
+  }
+  input.value = "";
+  await loadAccountConversationMessages();
+  input.focus();
+}
+
+async function openAccountConversation(index, options = {}) {
   const conversation = accountMessageConversations[Number(index)];
   if (!conversation) return;
+  if (isAccountPage() && byId("accountConversationPane")) {
+    selectedAccountConversationIndex = Number(index);
+    document.querySelectorAll(".message-conversation").forEach((button) => {
+      button.classList.toggle("is-selected", Number(button.dataset.conversationIndex) === selectedAccountConversationIndex);
+    });
+    if (byId("accountConversationTitle")) byId("accountConversationTitle").textContent = conversation.name;
+    if (byId("accountConversationContext")) {
+      byId("accountConversationContext").textContent = conversation.kind === "job"
+        ? `Jobb: ${conversation.jobTitle}`
+        : "Privat direktmeddelande";
+    }
+    const isClosed = conversation.kind === "job" && conversation.job.status === "completed";
+    byId("accountConversationForm")?.classList.toggle("hidden", isClosed);
+    setNotice("accountConversationNotice", isClosed ? "Jobbet är avslutat. Konversationen är sparad men stängd för nya meddelanden." : "");
+    if (byId("accountConversationMessages")) byId("accountConversationMessages").innerHTML = "";
+    await loadAccountConversationMessages();
+    if (accountConversationRefreshTimer) window.clearInterval(accountConversationRefreshTimer);
+    accountConversationRefreshTimer = window.setInterval(loadAccountConversationMessages, 5000);
+    if (options.scroll !== false && window.matchMedia("(max-width: 820px)").matches) {
+      byId("accountConversationPane")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (!isClosed && options.focus) byId("accountConversationInput")?.focus();
+    return;
+  }
   if (conversation.kind === "job") {
     if (!findAccountJob(conversation.jobId)) {
       if (conversation.job.user_id === currentUser.id) ownJobs.push({ ...conversation.job, applications: [], review: null });
@@ -2040,11 +2175,19 @@ async function signOut() {
   ownJobs = [];
   assignedJobs = [];
   accountMessageConversations = [];
+  selectedAccountConversationIndex = null;
+  if (accountConversationRefreshTimer) window.clearInterval(accountConversationRefreshTimer);
+  accountConversationRefreshTimer = null;
   notifications = [];
   if (notificationRefreshTimer) window.clearInterval(notificationRefreshTimer);
   notificationRefreshTimer = null;
   updateAccountButton();
   closeAccountModal();
+  if (isAccountPage()) {
+    byId("accountPageLoading")?.classList.add("hidden");
+    byId("accountPageContent")?.classList.add("hidden");
+    byId("accountPageGuest")?.classList.remove("hidden");
+  }
   if (byId("publicJobs")) renderPublicJobs(publicJobs);
 }
 
@@ -2070,6 +2213,14 @@ async function initializeAuth() {
       }
       updateAccountButton();
       startNotificationRefresh();
+      if (isAccountPage() && authReady) {
+        if (currentUser && currentProfile) await showAccountStep();
+        else if (currentUser) openAccountModal("customer");
+        else {
+          byId("accountPageContent")?.classList.add("hidden");
+          byId("accountPageGuest")?.classList.remove("hidden");
+        }
+      }
       if (byId("publicJobs")) renderPublicJobs(publicJobs);
     });
   }
@@ -2087,6 +2238,14 @@ async function initializeAuth() {
     openModal("job");
   } else if (!currentUser) {
     restorePendingLogin();
+  }
+  if (isAccountPage()) {
+    if (currentUser && currentProfile) await showAccountStep();
+    else if (currentUser) openAccountModal("customer");
+    else {
+      byId("accountPageLoading")?.classList.add("hidden");
+      byId("accountPageGuest")?.classList.remove("hidden");
+    }
   }
 }
 

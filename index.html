@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Grannpojkarna – Hjälpen finns runt hörnet</title>
   <meta name="description" content="Grannpojkarna matchar dig med privatpersoner och lokala företag som kan hjälpa till med småjobb och större projekt." />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <style>
     :root{
       --ink:#14261d;
@@ -676,6 +677,7 @@
 
       <div class="account-tabs" role="tablist" aria-label="Kontosidor">
         <button class="account-tab active" id="accountTabJobs" type="button" role="tab" aria-selected="true" aria-controls="accountJobsPanel" onclick="showAccountTab('jobs')">Mina jobb</button>
+        <button class="account-tab" id="accountTabMessages" type="button" role="tab" aria-selected="false" aria-controls="accountMessagesPanel" onclick="showAccountTab('messages')">Meddelanden</button>
         <button class="account-tab" id="accountTabProfile" type="button" role="tab" aria-selected="false" aria-controls="accountProfilePanel" onclick="showAccountTab('profile')">Min profil</button>
         <button class="account-tab hidden" id="accountTabEarnings" type="button" role="tab" aria-selected="false" aria-controls="accountEarningsPanel" onclick="showAccountTab('earnings')">Intjänat</button>
       </div>
@@ -687,6 +689,14 @@
           <button class="btn btn-light" id="enablePerformerBtn" onclick="showPerformerStep()">Aktivera utförarprofil</button>
         </div>
         <div class="job-list" id="myJobs"></div>
+      </section>
+
+      <section class="account-panel hidden" id="accountMessagesPanel" role="tabpanel" aria-labelledby="accountTabMessages">
+        <div class="message-center-intro">
+          <div><h3>Dina meddelanden</h3><p>Öppna en konversation för att läsa och svara.</p></div>
+          <button class="btn btn-light btn-small" type="button" onclick="loadAccountMessages()">Uppdatera</button>
+        </div>
+        <div class="message-center-list" id="accountMessagesList"></div>
       </section>
 
       <section class="account-panel hidden" id="accountProfilePanel" role="tabpanel" aria-labelledby="accountTabProfile">

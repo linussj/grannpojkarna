@@ -33,6 +33,7 @@ let selectedDirectProfile = null;
 let pendingDirectProfileId = null;
 let pendingDirectFocusMessage = false;
 let directMessageRefreshTimer = null;
+let accountMessageConversations = [];
 let notifications = [];
 let notificationRefreshTimer = null;
 let authResendTimer = null;
@@ -425,6 +426,7 @@ function showAccountTab(tabName) {
   const requestedTab = tabName === "earnings" && !currentProfile?.performer_enabled ? "jobs" : tabName;
   const tabs = {
     jobs: ["accountTabJobs", "accountJobsPanel"],
+    messages: ["accountTabMessages", "accountMessagesPanel"],
     profile: ["accountTabProfile", "accountProfilePanel"],
     earnings: ["accountTabEarnings", "accountEarningsPanel"]
   };
@@ -437,6 +439,179 @@ function showAccountTab(tabName) {
   const showAvailability = Boolean(currentProfile?.performer_enabled);
   byId("availabilityMenuWrap")?.classList.toggle("hidden", !showAvailability);
   if (!showAvailability) closeAvailabilityMenu();
+  if (requestedTab === "messages") loadAccountMessages();
+}
+
+async function loadContactProfiles(profileIds) {
+  const uniqueIds = [...new Set(profileIds.filter(Boolean))];
+  const results = await Promise.all(uniqueIds.map(async (profileId) => {
+    const { data } = await supabaseClient.rpc("get_contact_profile", { p_profile_id: profileId });
+    return [profileId, data?.[0] || null];
+  }));
+  return new Map(results);
+}
+
+function messageConversationTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  return sameDay
+    ? date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+}
+
+function messagePreview(body, fallback) {
+  const normalized = String(body || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return fallback;
+  return normalized.length > 92 ? `${normalized.slice(0, 89)}…` : normalized;
+}
+
+function renderMessageConversation(conversation, index) {
+  const avatar = conversation.profile?.avatar_path
+    ? `<img src="${escapeHtml(avatarUrl(conversation.profile.avatar_path))}" alt="" />`
+    : escapeHtml(initials(conversation.name));
+  const context = conversation.kind === "job"
+    ? `<span class="message-conversation-context">${escapeHtml(conversation.jobTitle)}</span>`
+    : '<span class="message-conversation-context">Direktmeddelande</span>';
+  return `<button class="message-conversation" type="button" onclick="openAccountConversation(${index})">
+    <span class="message-conversation-avatar" aria-hidden="true">${avatar}</span>
+    <span class="message-conversation-body">
+      <span class="message-conversation-head">
+        <strong>${escapeHtml(conversation.name)}</strong>
+        <time datetime="${escapeHtml(conversation.updatedAt || "")}">${escapeHtml(messageConversationTime(conversation.updatedAt))}</time>
+      </span>
+      ${context}
+      <span class="message-conversation-preview">${escapeHtml(conversation.preview)}</span>
+    </span>
+    <span class="message-conversation-arrow" aria-hidden="true">›</span>
+  </button>`;
+}
+
+function renderMessageGroup(title, description, conversations, emptyText) {
+  const rows = conversations.map((conversation) => {
+    const index = accountMessageConversations.indexOf(conversation);
+    return renderMessageConversation(conversation, index);
+  }).join("");
+  return `<section class="message-group">
+    <div class="message-group-head">
+      <div><h4>${escapeHtml(title)}</h4><span>${escapeHtml(description)}</span></div>
+      <span class="status-pill">${conversations.length}</span>
+    </div>
+    <div class="message-conversation-list">
+      ${rows || `<div class="message-empty">${escapeHtml(emptyText)}</div>`}
+    </div>
+  </section>`;
+}
+
+async function loadAccountMessages() {
+  const container = byId("accountMessagesList");
+  if (!container || !supabaseClient || !currentUser) return;
+  container.setAttribute("aria-busy", "true");
+  container.innerHTML = '<div class="account-meta">Hämtar dina konversationer…</div>';
+  const jobFields = "id, user_id, performer_id, title, category, status, updated_at";
+  const [ownedResult, assignedResult, directResult] = await Promise.all([
+    supabaseClient
+      .from("jobs")
+      .select(jobFields)
+      .eq("user_id", currentUser.id)
+      .in("status", ["accepted", "in_progress", "completed"])
+      .order("updated_at", { ascending: false }),
+    supabaseClient
+      .from("jobs")
+      .select(jobFields)
+      .eq("performer_id", currentUser.id)
+      .in("status", ["accepted", "in_progress", "completed"])
+      .order("updated_at", { ascending: false }),
+    supabaseClient
+      .from("direct_messages")
+      .select("id, sender_id, recipient_id, body, created_at")
+      .order("created_at", { ascending: false })
+      .limit(300)
+  ]);
+
+  const jobs = [...(ownedResult.data || []), ...(assignedResult.data || [])]
+    .filter((job, index, all) => all.findIndex((candidate) => Number(candidate.id) === Number(job.id)) === index);
+  const jobIds = jobs.map((job) => job.id);
+  const jobMessagesResult = jobIds.length
+    ? await supabaseClient
+        .from("job_messages")
+        .select("id, job_id, sender_id, body, created_at")
+        .in("job_id", jobIds)
+        .order("created_at", { ascending: false })
+        .limit(500)
+    : { data: [], error: null };
+
+  if (ownedResult.error || assignedResult.error || directResult.error || jobMessagesResult.error) {
+    container.removeAttribute("aria-busy");
+    container.innerHTML = '<div class="notice error">Meddelandena kunde inte hämtas. Försök igen om en liten stund.</div>';
+    return;
+  }
+
+  const latestJobMessage = new Map();
+  (jobMessagesResult.data || []).forEach((message) => {
+    if (!latestJobMessage.has(Number(message.job_id))) latestJobMessage.set(Number(message.job_id), message);
+  });
+
+  const latestDirectMessage = new Map();
+  (directResult.data || []).forEach((message) => {
+    const otherId = message.sender_id === currentUser.id ? message.recipient_id : message.sender_id;
+    if (otherId && !latestDirectMessage.has(otherId)) latestDirectMessage.set(otherId, message);
+  });
+
+  const jobOtherIds = jobs.map((job) => job.user_id === currentUser.id ? job.performer_id : job.user_id);
+  const profileIds = [...jobOtherIds, ...latestDirectMessage.keys()];
+  const profiles = await loadContactProfiles(profileIds);
+
+  const jobConversations = jobs.map((job) => {
+    const otherId = job.user_id === currentUser.id ? job.performer_id : job.user_id;
+    const profile = profiles.get(otherId);
+    const latest = latestJobMessage.get(Number(job.id));
+    return {
+      kind: "job",
+      job,
+      jobId: Number(job.id),
+      jobTitle: job.title || job.category || "Jobb",
+      profile,
+      profileId: otherId,
+      name: profile?.display_name || (job.user_id === currentUser.id ? "Utföraren" : "Beställaren"),
+      preview: messagePreview(latest?.body, job.status === "completed" ? "Jobbet är avslutat" : "Öppna chatten för att börja planera"),
+      updatedAt: latest?.created_at || job.updated_at
+    };
+  }).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+
+  const directConversations = [...latestDirectMessage.entries()].map(([profileId, latest]) => {
+    const profile = profiles.get(profileId);
+    return {
+      kind: "direct",
+      profile,
+      profileId,
+      name: profile?.display_name || "Användare",
+      preview: messagePreview(latest.body, "Öppna konversationen"),
+      updatedAt: latest.created_at
+    };
+  }).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+
+  accountMessageConversations = [...jobConversations, ...directConversations];
+  container.removeAttribute("aria-busy");
+  container.innerHTML = [
+    renderMessageGroup("Jobbkonversationer", "Samtal grupperade efter uppdrag", jobConversations, "När ett jobb har fått en utförare visas chatten här."),
+    renderMessageGroup("Direktmeddelanden", "Privata samtal utanför ett specifikt jobb", directConversations, "Dina direktmeddelanden till andra användare visas här.")
+  ].join("");
+}
+
+async function openAccountConversation(index) {
+  const conversation = accountMessageConversations[Number(index)];
+  if (!conversation) return;
+  if (conversation.kind === "job") {
+    if (!findAccountJob(conversation.jobId)) {
+      if (conversation.job.user_id === currentUser.id) ownJobs.push({ ...conversation.job, applications: [], review: null });
+      else assignedJobs.push(conversation.job);
+    }
+    await openJobChat(conversation.jobId);
+    return;
+  }
+  await openPerformerProfile(conversation.profileId, true);
 }
 
 function initials(name) {
@@ -1864,6 +2039,7 @@ async function signOut() {
   currentProfile = null;
   ownJobs = [];
   assignedJobs = [];
+  accountMessageConversations = [];
   notifications = [];
   if (notificationRefreshTimer) window.clearInterval(notificationRefreshTimer);
   notificationRefreshTimer = null;

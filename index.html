@@ -716,6 +716,17 @@
               <label for="editProfileSkills">Vad kan du hjälpa till med?</label>
               <input id="editProfileSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" />
             </div>
+            <div class="profile-setting-card">
+              <div>
+                <label for="emailJobAlertMode">Mejl om nya jobb</label>
+                <span>Skickas till mejladressen du använder för att logga in.</span>
+              </div>
+              <select id="emailJobAlertMode">
+                <option value="off">Av</option>
+                <option value="matching">Jobb som matchar mig</option>
+                <option value="all">Alla nya jobb</option>
+              </select>
+            </div>
           </div>
           <button class="btn btn-primary" id="saveOptionalProfileBtn" type="button" onclick="saveOptionalProfile()">Spara profil</button>
           <div class="profile-progress"><span id="profileProgressBar"></span></div>

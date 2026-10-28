@@ -395,6 +395,55 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .performer-card>.btn{margin-top:auto;width:100%}
 .availability-disclaimer{margin:14px 0 0;color:var(--muted);font-size:.8rem}
 
+/* Dedikerad kontosida */
+.account-page-main{min-height:calc(100vh - 74px);background:linear-gradient(180deg,#f4f7f5 0,#fff 540px)}
+.account-page-loading{padding-top:80px;padding-bottom:80px}
+.account-loading-card{min-height:260px;display:grid;place-items:center;align-content:center;gap:14px;border:1px solid var(--line);border-radius:28px;background:white;box-shadow:var(--shadow);color:var(--muted)}
+.account-loading-mark{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:var(--brand);color:white;font-size:1.6rem;font-weight:950}
+.account-guest{padding:88px 0 110px}
+.account-guest-wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(330px,.9fr);gap:70px;align-items:center}
+.account-guest-copy h1{max-width:670px;margin:14px 0 18px;font-size:clamp(3rem,6vw,5.7rem);letter-spacing:-.055em;line-height:.96}
+.account-guest-copy p{max-width:620px;margin:0 0 26px;color:var(--muted);font-size:1.12rem}
+.account-guest-preview{display:grid;gap:10px;padding:22px;border:1px solid #cfe0d5;border-radius:28px;background:white;box-shadow:0 24px 70px rgba(31,74,56,.14);transform:rotate(1deg)}
+.guest-preview-head{display:flex;align-items:center;gap:11px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.guest-preview-head>span{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--brand);color:white;font-weight:900}
+.guest-preview-row{display:grid;grid-template-columns:44px 1fr;gap:12px;align-items:center;padding:13px;border-radius:16px;background:#f7faf8}
+.guest-preview-row>span{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand-dark);font-weight:900}
+.guest-preview-row div{display:grid;gap:2px}.guest-preview-row small{color:var(--muted)}
+.account-page-content{padding:40px 0 90px}
+.account-page-shell{display:grid;grid-template-columns:270px minmax(0,1fr);gap:26px;align-items:start}
+.account-sidebar{position:sticky;top:98px;display:grid;gap:16px;padding:20px;border:1px solid var(--line);border-radius:24px;background:white;box-shadow:0 14px 42px rgba(23,55,40,.08)}
+.account-sidebar-identity{display:grid;grid-template-columns:auto minmax(0,1fr);gap:13px;align-items:center;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.account-sidebar-identity .account-avatar{width:60px;height:60px;border-radius:18px}
+.account-sidebar-identity h1{margin:0 0 2px;font-size:1.1rem;line-height:1.2;overflow:hidden;text-overflow:ellipsis}
+.account-sidebar-identity .status-pill{display:inline-flex;margin-top:8px;font-size:.7rem}
+.account-availability-button{width:100%;justify-content:center;padding:9px 11px}
+.account-page-nav{display:grid;gap:5px}
+.account-page-nav .account-tab{width:100%;display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:8px;border:0;border-radius:13px;padding:11px 12px;text-align:left;color:var(--muted)}
+.account-page-nav .account-tab>span{width:24px;text-align:center;color:var(--brand);font-size:1rem}
+.account-page-nav .account-tab>em{min-width:22px;height:22px;border-radius:999px;display:grid;place-items:center;background:#edf2ef;color:var(--muted);font-size:.7rem;font-style:normal}
+.account-page-nav .account-tab:hover{background:#f3f7f4;color:var(--ink)}
+.account-page-nav .account-tab.active{background:var(--brand);color:white}
+.account-page-nav .account-tab.active>span{color:white}.account-page-nav .account-tab.active>em{background:rgba(255,255,255,.2);color:white}
+.account-sidebar-logout{border:0;border-top:1px solid var(--line);background:transparent;padding:15px 8px 2px;color:var(--danger);font-weight:850;text-align:left;cursor:pointer}
+.account-workspace{min-width:0;display:grid;gap:16px}
+.account-workspace>.profile-prompt{margin:0}
+.account-workspace>.account-panel{min-height:560px;padding:26px;border:1px solid var(--line);border-radius:24px;background:white;box-shadow:0 14px 42px rgba(23,55,40,.06)}
+.account-panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:22px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.account-panel-heading h2{margin:5px 0 4px;font-size:1.9rem;letter-spacing:-.035em}.account-panel-heading p{margin:0;color:var(--muted)}
+.account-page-content .job-list{max-height:none;margin-top:0;overflow:visible}.account-page-content .account-job-group+.account-job-group{margin-top:22px}
+.account-message-layout{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(360px,1.1fr);gap:16px;min-height:570px}
+.account-inbox-column{min-width:0;padding-right:3px}.account-inbox-column .message-center-list{max-height:610px;margin:0;overflow:auto}
+.account-inbox-column .message-group-head>div>span{display:none}
+.account-inbox-column .message-conversation{padding:12px}.account-inbox-column .message-conversation-avatar{width:42px;height:42px}
+.message-conversation.is-selected{background:var(--brand-soft)}
+.account-conversation-pane{min-width:0;display:grid;grid-template-rows:auto minmax(300px,1fr) auto auto;gap:12px;padding:18px;border:1px solid var(--line);border-radius:19px;background:#fbfcfb}
+.account-conversation-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:13px;border-bottom:1px solid var(--line)}
+.account-conversation-head h3{margin:0 0 3px;font-size:1.15rem}.account-conversation-head p{margin:0;color:var(--brand-dark);font-size:.8rem;font-weight:800}
+.account-conversation-messages{min-height:300px;max-height:440px;background:#f1f5f2}
+.account-profile-editor{max-width:760px}.profile-save-row{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}.profile-save-row>div{display:grid;gap:6px}
+.account-auth-dialog{max-width:620px}
+
 @media(max-width:1000px){
   #modal{align-items:center;justify-content:flex-start;flex-direction:column}
   .job-live-panel{display:block;width:100%;max-width:620px;max-height:none;align-self:auto}
@@ -415,6 +464,14 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .performer-grid{grid-template-columns:1fr}
   .availability-section-head{grid-template-columns:1fr;align-items:start}
   .performer-filters{grid-template-columns:1fr}
+  .account-page-shell{grid-template-columns:1fr}
+  .account-sidebar{position:static}
+  .account-page-nav{grid-template-columns:repeat(4,1fr)}
+  .account-page-nav .account-tab{grid-template-columns:1fr;justify-items:center;text-align:center;gap:4px}
+  .account-page-nav .account-tab>em{position:absolute;transform:translate(34px,-13px)}
+  .account-sidebar-logout{text-align:center}
+  .account-guest-wrap{grid-template-columns:1fr;gap:38px}
+  .account-guest-preview{max-width:620px}
 }
 @media(max-width:640px){
   .wrap{padding:0 16px}
@@ -459,5 +516,20 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .jobs-hero h1{font-size:3rem}
   .jobs-toolbar,.feed-card-top,.feed-card-footer{align-items:flex-start;flex-direction:column}
   .feed-card-footer .btn{width:100%}
+  .account-page-content{padding:20px 0 60px}
+  .account-sidebar{padding:16px;border-radius:20px}
+  .account-sidebar-identity{grid-template-columns:auto 1fr}
+  .account-page-nav{grid-template-columns:1fr 1fr}
+  .account-page-nav .account-tab{grid-template-columns:22px 1fr auto;justify-items:stretch;text-align:left}
+  .account-page-nav .account-tab>em{position:static;transform:none}
+  .account-workspace>.account-panel{min-height:0;padding:18px;border-radius:20px}
+  .account-panel-heading{align-items:flex-start;flex-direction:column;margin-bottom:18px;padding-bottom:16px}
+  .account-panel-heading .account-actions,.account-panel-heading .btn{width:100%}
+  .account-message-layout{grid-template-columns:1fr;min-height:0}
+  .account-inbox-column .message-center-list{max-height:none;overflow:visible}
+  .account-conversation-pane{grid-template-rows:auto minmax(280px,auto) auto auto;scroll-margin-top:82px}
+  .account-conversation-messages{max-height:55vh}
+  .profile-save-row{grid-template-columns:1fr}.profile-save-row .btn{width:100%}
+  .account-guest{padding:58px 0 80px}.account-guest-copy h1{font-size:3.2rem}.account-guest-preview{transform:none}
 }
 @media(prefers-reduced-motion:reduce){.callback-fab{transition:none}}

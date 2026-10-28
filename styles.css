@@ -233,6 +233,10 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .account-panel{min-height:150px}
 .profile-editor{display:grid;gap:15px}
 #performerProfileFields{display:grid;gap:15px}
+.profile-setting-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,280px);align-items:center;gap:14px;padding:15px;border:1px solid var(--line);border-radius:16px;background:#fbfcfb}
+.profile-setting-card>div{display:grid;gap:3px}
+.profile-setting-card span{font-size:.82rem;color:var(--muted);line-height:1.4}
+.profile-setting-card select{margin:0}
 .avatar-editor{display:flex;align-items:center;gap:16px;padding:15px;border:1px solid var(--line);border-radius:18px;background:#fbfcfb}
 .avatar-editor>div:last-child{display:grid;gap:7px}
 .optional-label{font-size:.72rem;color:var(--brand-dark);background:var(--brand-soft);border-radius:999px;padding:3px 7px;margin-left:5px}
@@ -413,6 +417,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .notification-center{right:16px;top:76px}
   .availability-popover{left:auto;right:-50px;width:min(330px,calc(100vw - 32px))}
   .avatar-editor{align-items:flex-start}
+  .profile-setting-card{grid-template-columns:1fr}
   .earnings-grid{grid-template-columns:1fr}
   .goal-controls{grid-template-columns:1fr}
   .review-controls{grid-template-columns:1fr}

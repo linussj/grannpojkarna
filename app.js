@@ -39,7 +39,7 @@ let authResendTimer = null;
 let authAutoSubmitTimer = null;
 let authReady = false;
 
-const profileFields = "id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek, availability_status, available_until";
+const profileFields = "id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek, availability_status, available_until, email_job_alert_mode";
 
 const byId = (id) => document.getElementById(id);
 
@@ -472,6 +472,7 @@ function updateProfilePanel() {
   if (byId("editProfileBio")) byId("editProfileBio").value = currentProfile.bio || "";
   if (byId("editProfileArea")) byId("editProfileArea").value = currentProfile.service_area || "";
   if (byId("editProfileSkills")) byId("editProfileSkills").value = (currentProfile.skills || []).join(", ");
+  if (byId("emailJobAlertMode")) byId("emailJobAlertMode").value = currentProfile.email_job_alert_mode || "off";
   byId("performerProfileFields")?.classList.toggle("hidden", !currentProfile.performer_enabled);
   updateAvailabilityCard();
 
@@ -703,6 +704,7 @@ async function saveOptionalProfile() {
     .map((value) => value.trim())
     .filter(Boolean)
     .slice(0, 12);
+  const emailJobAlertMode = byId("emailJobAlertMode")?.value || "off";
   const file = byId("profileAvatarInput")?.files?.[0] || null;
   if (displayName.length < 2) {
     setNotice("accountNotice", "Ange ett namn med minst två tecken.", "error");
@@ -717,6 +719,7 @@ async function saveOptionalProfile() {
     if (currentProfile.performer_enabled) {
       updates.service_area = serviceArea || null;
       updates.skills = skills;
+      updates.email_job_alert_mode = ["off", "matching", "all"].includes(emailJobAlertMode) ? emailJobAlertMode : "off";
     }
     const { data, error } = await supabaseClient
       .from("profiles")
@@ -905,7 +908,7 @@ async function submitJob(event) {
   }
   const isEditing = Boolean(editingJobId);
   setLoading("submitBtn", true, isEditing ? "Sparar…" : "Publicerar…", isEditing ? "Spara ändringar" : "Publicera jobb");
-  const { error } = isEditing
+  const result = isEditing
     ? await supabaseClient.rpc("edit_my_open_job", {
         p_job_id: editingJobId,
         p_title: payload.title,
@@ -916,9 +919,9 @@ async function submitJob(event) {
         p_price_type: payload.price_type,
         p_category: payload.category
       })
-    : await supabaseClient.from("jobs").insert(payload);
+    : await supabaseClient.from("jobs").insert(payload).select("id").single();
   setLoading("submitBtn", false, isEditing ? "Sparar…" : "Publicerar…", isEditing ? "Spara ändringar" : "Publicera jobb");
-  if (error) {
+  if (result.error) {
     setNotice("jobNotice", isEditing ? "Ändringarna kunde inte sparas. Jobbet kan ha accepterats under tiden." : "Jobbet kunde inte publiceras. Kontrollera att databasuppdateringen är körd.", "error");
     return;
   }
@@ -930,6 +933,11 @@ async function submitJob(event) {
       openAccountModal();
     }, 700);
     return;
+  }
+  const publishedJobId = result.data?.id;
+  if (publishedJobId) {
+    // Mejlet skickas server-side. Ett tillfälligt mejlfel ska aldrig hindra jobbet från att publiceras.
+    supabaseClient.functions.invoke("send-new-job-alerts", { body: { job_id: publishedJobId } }).catch(() => {});
   }
   byId("jobForm").reset();
   setNotice("jobNotice", "Jobbet är publicerat! Du skickas till jobblistan.", "success");

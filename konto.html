@@ -168,7 +168,24 @@
         <section class="account-panel hidden" id="accountEarningsPanel" role="tabpanel" aria-labelledby="accountTabEarnings">
           <div class="account-panel-heading"><div><span class="eyebrow">Resultat</span><h2>Intjänat</h2><p>Följ dina slutförda jobb, betyg och ditt sparmål.</p></div></div>
           <div class="earnings-grid"><div class="stat-card"><span>Totalt intjänat</span><strong id="totalEarnings">0 kr</strong></div><div class="stat-card"><span>Utförda jobb</span><strong id="completedJobsCount">0</strong></div><div class="stat-card"><span>Ditt betyg</span><strong id="averageRating">–</strong></div></div>
-          <div class="goal-card"><div><h4>Mitt sparmål</h4><p>Sätt ett frivilligt mål och följ hur långt dina utförda jobb har tagit dig.</p></div><div class="goal-controls"><input id="savingsGoalInput" inputmode="numeric" placeholder="Exempel: 10 000 kr" /><button class="btn btn-primary btn-small" id="saveGoalBtn" type="button" onclick="saveSavingsGoal()">Spara mål</button></div><div class="goal-progress"><span id="goalProgressBar"></span></div><div class="account-meta" id="goalProgressText">Inget mål satt ännu.</div></div>
+          <section class="savings-section" aria-labelledby="savingsGoalsHeading">
+            <div class="savings-section-head">
+              <div><h3 id="savingsGoalsHeading">Mina sparmål</h3><p>Skapa egna mål och följ hur sparandet växer, utan att räkna all inkomst som sparad.</p></div>
+              <button class="btn btn-light btn-small" type="button" onclick="openSavingsGoalForm()">+ Nytt sparmål</button>
+            </div>
+            <form class="goal-editor hidden" id="savingsGoalForm" onsubmit="saveSavingsGoal(event)">
+              <div class="goal-editor-head"><div><strong id="savingsGoalFormTitle">Nytt sparmål</strong><span>Du kan uppdatera beloppet när du vill.</span></div><button class="close" type="button" onclick="closeSavingsGoalForm()" aria-label="Stäng sparmålsformuläret">×</button></div>
+              <div class="goal-form-grid">
+                <div class="field"><label for="savingsGoalName">Namn på målet</label><input id="savingsGoalName" maxlength="80" placeholder="Exempel: Skidresa Åre" required /></div>
+                <div class="field"><label for="savingsGoalTarget">Målbelopp</label><input id="savingsGoalTarget" inputmode="numeric" placeholder="15 000 kr" required /></div>
+                <div class="field"><label for="savingsGoalSaved">Sparat hittills</label><input id="savingsGoalSaved" inputmode="numeric" placeholder="6 500 kr" /></div>
+                <div class="field"><label for="savingsGoalDate">Måldatum <span class="optional-label">Frivilligt</span></label><input id="savingsGoalDate" type="date" /></div>
+              </div>
+              <div class="goal-editor-actions"><button class="btn btn-light btn-small" type="button" onclick="closeSavingsGoalForm()">Avbryt</button><button class="btn btn-primary btn-small" id="saveGoalBtn" type="submit">Spara mål</button></div>
+              <div class="notice hidden" id="savingsGoalNotice" role="status"></div>
+            </form>
+            <div class="savings-goals-grid" id="savingsGoalsList"></div>
+          </section>
           <div class="earnings-list" id="earningsList"></div>
         </section>
 

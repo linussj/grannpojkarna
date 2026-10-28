@@ -242,7 +242,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .message-group-head h4{margin:0;font-size:1rem}
 .message-group-head span:not(.status-pill){color:var(--muted);font-size:.8rem}
 .message-conversation-list{display:grid;border:1px solid var(--line);border-radius:17px;overflow:hidden;background:#fff}
-.message-conversation{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:13px 14px;border:0;border-bottom:1px solid var(--line);background:#fff;color:var(--ink);text-align:left;cursor:pointer}
+.message-conversation{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:13px 14px;border:0;border-bottom:1px solid var(--line);background:#fff;color:var(--ink);text-align:left;cursor:pointer}
 .message-conversation:last-child{border-bottom:0}
 .message-conversation:hover,.message-conversation:focus-visible{background:#f4f8f5;outline:none}
 .message-conversation:focus-visible{box-shadow:inset 0 0 0 2px var(--brand)}
@@ -254,6 +254,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .message-conversation-head time{flex:0 0 auto;color:var(--muted);font-size:.72rem}
 .message-conversation-context{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--brand-dark);font-size:.76rem;font-weight:850}
 .message-conversation-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:.84rem}
+.message-unread-count{min-width:22px;height:22px;padding:0 6px;border-radius:999px;display:grid;place-items:center;background:var(--brand);color:white;font-size:.7rem;font-weight:900}
 .message-conversation-arrow{color:var(--brand);font-size:1.45rem;line-height:1}
 .message-empty{padding:18px;color:var(--muted);font-size:.86rem;background:#fbfcfb}
 .profile-editor{display:grid;gap:15px}
@@ -271,6 +272,12 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .account-job-group-head>div{display:grid;gap:2px}
 .account-job-group-head h4{margin:0;font-size:1.05rem}
 .account-job-group-head span:not(.status-pill){font-size:.82rem;color:var(--muted)}
+.job-filter-tabs{display:inline-flex;justify-self:start;gap:4px;padding:4px;border:1px solid var(--line);border-radius:13px;background:#f4f7f5}
+.job-filter-tab{display:flex;align-items:center;gap:7px;border:0;border-radius:9px;padding:8px 11px;background:transparent;color:var(--muted);font-size:.8rem;font-weight:850;cursor:pointer}
+.job-filter-tab>span{min-width:20px;height:20px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:#e4ebe6;color:var(--muted);font-size:.68rem}
+.job-filter-tab.is-active{background:white;color:var(--brand-dark);box-shadow:0 2px 8px rgba(23,55,40,.08)}
+.job-filter-tab.is-active>span{background:var(--brand-soft);color:var(--brand-dark)}
+.account-job-filter-content{display:grid;gap:11px}
 .job-row{border:1px solid var(--line);border-radius:16px;padding:16px;background:#fbfcfb}
 .job-row-top{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
 .job-row h4{margin:0 0 4px}
@@ -305,6 +312,21 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .goal-card h4{margin:0 0 3px;font-size:1.08rem}
 .goal-card p{margin:0;color:var(--muted);font-size:.9rem}
 .goal-controls{display:grid;grid-template-columns:1fr auto;gap:9px}
+.savings-section{display:grid;gap:14px;margin-top:18px;padding:20px;border:1px solid #cfe0d5;border-radius:20px;background:linear-gradient(145deg,#f1f8f3,#fbfdfb)}
+.savings-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.savings-section-head h3{margin:0 0 4px;font-size:1.18rem}.savings-section-head p{margin:0;color:var(--muted);font-size:.88rem}
+.goal-editor{display:grid;gap:14px;padding:16px;border:1px solid var(--line);border-radius:16px;background:white}
+.goal-editor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.goal-editor-head>div{display:grid;gap:2px}.goal-editor-head span{color:var(--muted);font-size:.8rem}
+.goal-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.goal-editor-actions{display:flex;justify-content:flex-end;gap:9px}
+.savings-goals-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.savings-goal-card{min-width:0;display:grid;gap:12px;padding:17px;border:1px solid var(--line);border-radius:17px;background:white}
+.savings-goal-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.savings-goal-top>div{min-width:0}.savings-goal-top span{color:var(--muted);font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em}.savings-goal-top h4{margin:3px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.savings-goal-top>strong{color:var(--brand-dark);font-size:1.2rem}
+.savings-goal-amount{display:flex;align-items:baseline;gap:6px}.savings-goal-amount strong{font-size:1.12rem}.savings-goal-amount span{color:var(--muted);font-size:.8rem}
+.savings-goal-facts{display:flex;gap:6px;flex-wrap:wrap}.savings-goal-facts span{padding:5px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand-dark);font-size:.72rem;font-weight:750}
+.savings-goal-actions{display:flex;justify-content:space-between;gap:12px;padding-top:2px}.savings-goal-actions .link-button{font-size:.78rem}.danger-link{color:var(--danger)}
+.savings-empty{grid-column:1/-1;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:14px;padding:18px;border:1px dashed #b9cfc0;border-radius:16px;background:rgba(255,255,255,.7)}
+.savings-empty>span{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);font-size:1.35rem;font-weight:900}.savings-empty p{margin:3px 0 0;color:var(--muted);font-size:.82rem}
 .earnings-list{display:grid;gap:8px;margin-top:14px}
 .earning-row{display:flex;justify-content:space-between;gap:14px;padding:12px 3px;border-bottom:1px solid var(--line)}
 .earning-row:last-child{border-bottom:0}
@@ -321,6 +343,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .chat-message.is-other{align-self:flex-start;border-bottom-left-radius:5px}
 .chat-message span{font-size:.7rem;color:var(--muted)}
 .chat-message.is-own span{color:#dcece3}
+.chat-message .message-receipt{justify-self:end;font-weight:800;letter-spacing:.01em}.chat-message .message-receipt.is-read{color:white}
 .chat-empty{margin:auto;display:grid;gap:5px;text-align:center;color:var(--muted)}
 .chat-empty strong{color:var(--ink)}
 .chat-form{display:grid;grid-template-columns:1fr auto;gap:9px;align-items:end}
@@ -417,7 +440,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .account-sidebar-identity .account-avatar{width:60px;height:60px;border-radius:18px}
 .account-sidebar-identity>div{min-width:0}
 .account-sidebar-identity h1{margin:0 0 2px;font-size:1.1rem;line-height:1.2;overflow:hidden;text-overflow:ellipsis}
-.account-sidebar-identity .account-meta{overflow-wrap:anywhere}
+.account-sidebar-identity .account-meta{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .account-sidebar-identity .status-pill{grid-column:1/-1;display:inline-flex;justify-self:start;max-width:100%;margin-top:0;font-size:.7rem;line-height:1.3;white-space:normal;overflow-wrap:anywhere}
 .account-availability-button{width:100%;justify-content:center;padding:9px 11px}
 .account-page-nav{display:grid;gap:5px}
@@ -499,6 +522,9 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .avatar-editor{align-items:flex-start}
   .earnings-grid{grid-template-columns:1fr}
   .goal-controls{grid-template-columns:1fr}
+  .savings-section{padding:16px}.savings-section-head{align-items:stretch;flex-direction:column}.savings-section-head .btn{width:100%}
+  .savings-goals-grid,.goal-form-grid{grid-template-columns:1fr}
+  .savings-empty{grid-template-columns:auto 1fr}.savings-empty .btn{grid-column:1/-1;width:100%}
   .review-controls{grid-template-columns:1fr}
   .application-card{grid-template-columns:auto 1fr}
   .application-actions{grid-column:1/-1;justify-items:stretch}
@@ -533,5 +559,10 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .account-conversation-messages{max-height:55vh}
   .profile-save-row{grid-template-columns:1fr}.profile-save-row .btn{width:100%}
   .account-guest{padding:58px 0 80px}.account-guest-copy h1{font-size:3.2rem}.account-guest-preview{transform:none}
+}
+@media(max-width:520px){
+  .job-filter-tabs{width:100%}.job-filter-tab{flex:1;justify-content:center;padding:8px 7px}
+  .message-conversation{grid-template-columns:auto minmax(0,1fr) auto;gap:9px}.message-conversation-arrow{display:none}
+  .goal-editor-actions{display:grid;grid-template-columns:1fr 1fr}.goal-editor-actions .btn{width:100%}
 }
 @media(prefers-reduced-motion:reduce){.callback-fab{transition:none}}

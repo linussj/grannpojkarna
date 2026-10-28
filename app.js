@@ -25,6 +25,7 @@ let roleHint = document.body.dataset.page === "jobs" ? "performer" : "customer";
 let publicJobs = [];
 let ownJobs = [];
 let assignedJobs = [];
+let accountJobFilters = { performer: "active", owner: "active" };
 let availablePerformers = [];
 let selectedChatJobId = null;
 let selectedChatOtherLabel = "Den andra personen";
@@ -36,6 +37,8 @@ let directMessageRefreshTimer = null;
 let accountMessageConversations = [];
 let selectedAccountConversationIndex = null;
 let accountConversationRefreshTimer = null;
+let savingsGoals = [];
+let editingSavingsGoalId = null;
 let notifications = [];
 let notificationRefreshTimer = null;
 let authResendTimer = null;
@@ -229,7 +232,10 @@ async function showAccountStep() {
   byId("accountPageContent")?.classList.remove("hidden");
   if (byId("accountTitle")) byId("accountTitle").textContent = "Mitt konto";
   if (byId("accountName")) byId("accountName").textContent = currentProfile?.display_name || "Mitt konto";
-  if (byId("accountEmail")) byId("accountEmail").textContent = currentUser?.email || "";
+  if (byId("accountEmail")) {
+    byId("accountEmail").textContent = currentUser?.email || "";
+    byId("accountEmail").title = currentUser?.email || "";
+  }
   const accountType = currentProfile?.account_type === "company" ? "Företag" : "Privatperson";
   const capability = currentProfile?.performer_enabled ? "Beställare + utförare" : "Beställare";
   if (byId("accountRole")) byId("accountRole").textContent = `${accountType} · ${capability}`;
@@ -238,9 +244,11 @@ async function showAccountStep() {
   byId("accountTabEarnings")?.classList.toggle("hidden", !currentProfile?.performer_enabled);
   updateProfilePanel();
   const requestedTab = window.location.hash.replace("#", "");
-  showAccountTab(["jobs", "messages", "profile", "earnings"].includes(requestedTab) ? requestedTab : "jobs");
+  const initialTab = ["jobs", "messages", "profile", "earnings"].includes(requestedTab) ? requestedTab : "jobs";
+  showAccountTab(initialTab);
   await Promise.all([
     loadMyJobs(),
+    initialTab === "messages" ? Promise.resolve() : loadAccountMessages(),
     currentProfile?.performer_enabled ? loadEarnings() : Promise.resolve()
   ]);
 }
@@ -502,6 +510,62 @@ function messagePreview(body, fallback) {
   return normalized.length > 92 ? `${normalized.slice(0, 89)}…` : normalized;
 }
 
+function messageReadReceipt(message) {
+  if (!message.read_at) return "✓ Levererat";
+  const time = new Date(message.read_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  return `✓✓ Läst ${time}`;
+}
+
+function renderChatMessage(message, otherLabel) {
+  const isOwn = message.sender_id === currentUser.id;
+  const timestamp = new Date(message.created_at).toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return `<div class="chat-message ${isOwn ? "is-own" : "is-other"}">
+    <div>${escapeHtml(message.body)}</div>
+    <span>${isOwn ? "Du" : escapeHtml(otherLabel)} · ${escapeHtml(timestamp)}</span>
+    ${isOwn ? `<span class="message-receipt ${message.read_at ? "is-read" : ""}">${escapeHtml(messageReadReceipt(message))}</span>` : ""}
+  </div>`;
+}
+
+async function markMessagesRead(tableName, messages) {
+  const unreadIds = messages
+    .filter((message) => message.sender_id !== currentUser.id && !message.read_at)
+    .map((message) => message.id);
+  if (!unreadIds.length) return messages;
+  const readAt = new Date().toISOString();
+  const { error } = await supabaseClient
+    .from(tableName)
+    .update({ read_at: readAt })
+    .in("id", unreadIds);
+  if (!error) {
+    messages.forEach((message) => {
+      if (unreadIds.includes(message.id)) message.read_at = readAt;
+    });
+  }
+  return messages;
+}
+
+async function markConversationNotificationsRead(conversation) {
+  if (!currentUser || !conversation) return;
+  let query = supabaseClient
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", currentUser.id)
+    .is("read_at", null);
+  query = conversation.kind === "job"
+    ? query.eq("type", "new_message").eq("job_id", conversation.jobId)
+    : query.eq("type", "direct_message").eq("related_user_id", conversation.profileId);
+  const { error } = await query;
+  if (error) return;
+  notifications.forEach((notification) => {
+    const matches = conversation.kind === "job"
+      ? notification.type === "new_message" && Number(notification.job_id) === Number(conversation.jobId)
+      : notification.type === "direct_message" && notification.related_user_id === conversation.profileId;
+    if (matches) notification.read_at ||= new Date().toISOString();
+  });
+  if (notifications.length) renderNotifications();
+  else updateNotificationBadge();
+}
+
 function renderMessageConversation(conversation, index) {
   const avatar = conversation.profile?.avatar_path
     ? `<img src="${escapeHtml(avatarUrl(conversation.profile.avatar_path))}" alt="" />`
@@ -520,6 +584,7 @@ function renderMessageConversation(conversation, index) {
       ${context}
       <span class="message-conversation-preview">${escapeHtml(conversation.preview)}</span>
     </span>
+    ${conversation.unreadCount ? `<span class="message-unread-count" aria-label="${conversation.unreadCount} olästa">${conversation.unreadCount > 99 ? "99+" : conversation.unreadCount}</span>` : ""}
     <span class="message-conversation-arrow" aria-hidden="true">›</span>
   </button>`;
 }
@@ -561,7 +626,7 @@ async function loadAccountMessages() {
       .order("updated_at", { ascending: false }),
     supabaseClient
       .from("direct_messages")
-      .select("id, sender_id, recipient_id, body, created_at")
+      .select("id, sender_id, recipient_id, body, read_at, created_at")
       .order("created_at", { ascending: false })
       .limit(300)
   ]);
@@ -572,7 +637,7 @@ async function loadAccountMessages() {
   const jobMessagesResult = jobIds.length
     ? await supabaseClient
         .from("job_messages")
-        .select("id, job_id, sender_id, body, created_at")
+        .select("id, job_id, sender_id, body, read_at, created_at")
         .in("job_id", jobIds)
         .order("created_at", { ascending: false })
         .limit(500)
@@ -585,14 +650,23 @@ async function loadAccountMessages() {
   }
 
   const latestJobMessage = new Map();
+  const unreadJobMessages = new Map();
   (jobMessagesResult.data || []).forEach((message) => {
     if (!latestJobMessage.has(Number(message.job_id))) latestJobMessage.set(Number(message.job_id), message);
+    if (message.sender_id !== currentUser.id && !message.read_at) {
+      const jobId = Number(message.job_id);
+      unreadJobMessages.set(jobId, (unreadJobMessages.get(jobId) || 0) + 1);
+    }
   });
 
   const latestDirectMessage = new Map();
+  const unreadDirectMessages = new Map();
   (directResult.data || []).forEach((message) => {
     const otherId = message.sender_id === currentUser.id ? message.recipient_id : message.sender_id;
     if (otherId && !latestDirectMessage.has(otherId)) latestDirectMessage.set(otherId, message);
+    if (message.recipient_id === currentUser.id && !message.read_at && otherId) {
+      unreadDirectMessages.set(otherId, (unreadDirectMessages.get(otherId) || 0) + 1);
+    }
   });
 
   const jobOtherIds = jobs.map((job) => job.user_id === currentUser.id ? job.performer_id : job.user_id);
@@ -612,7 +686,8 @@ async function loadAccountMessages() {
       profileId: otherId,
       name: profile?.display_name || (job.user_id === currentUser.id ? "Utföraren" : "Beställaren"),
       preview: messagePreview(latest?.body, job.status === "completed" ? "Jobbet är avslutat" : "Öppna chatten för att börja planera"),
-      updatedAt: latest?.created_at || job.updated_at
+      updatedAt: latest?.created_at || job.updated_at,
+      unreadCount: unreadJobMessages.get(Number(job.id)) || 0
     };
   }).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
@@ -624,7 +699,8 @@ async function loadAccountMessages() {
       profileId,
       name: profile?.display_name || "Användare",
       preview: messagePreview(latest.body, "Öppna konversationen"),
-      updatedAt: latest.created_at
+      updatedAt: latest.created_at,
+      unreadCount: unreadDirectMessages.get(profileId) || 0
     };
   }).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
@@ -635,7 +711,8 @@ async function loadAccountMessages() {
     ? accountMessageConversations.findIndex((conversation) => `${conversation.kind}:${conversation.kind === "job" ? conversation.jobId : conversation.profileId}` === previousKey)
     : accountMessageConversations.length ? 0 : null;
   if (selectedAccountConversationIndex < 0) selectedAccountConversationIndex = accountMessageConversations.length ? 0 : null;
-  if (byId("accountMessageNavCount")) byId("accountMessageNavCount").textContent = String(accountMessageConversations.length);
+  const unreadCount = accountMessageConversations.reduce((sum, conversation) => sum + Number(conversation.unreadCount || 0), 0);
+  if (byId("accountMessageNavCount")) byId("accountMessageNavCount").textContent = String(unreadCount);
   container.removeAttribute("aria-busy");
   container.innerHTML = [
     renderMessageGroup("Jobbkonversationer", "Samtal grupperade efter uppdrag", jobConversations, "När ett jobb har fått en utförare visas chatten här."),
@@ -664,28 +741,27 @@ async function loadAccountConversationMessages() {
   const result = conversation.kind === "job"
     ? await supabaseClient
         .from("job_messages")
-        .select("id, sender_id, body, created_at")
+        .select("id, sender_id, body, read_at, created_at")
         .eq("job_id", conversation.jobId)
         .order("created_at", { ascending: true })
     : await supabaseClient
         .from("direct_messages")
-        .select("id, sender_id, recipient_id, body, created_at")
+        .select("id, sender_id, recipient_id, body, read_at, created_at")
         .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${conversation.profileId}),and(sender_id.eq.${conversation.profileId},recipient_id.eq.${currentUser.id})`)
         .order("created_at", { ascending: true });
   if (result.error) {
     container.innerHTML = '<div class="notice error">Konversationen kunde inte hämtas.</div>';
     return;
   }
-  const messages = result.data || [];
+  const messages = await markMessagesRead(conversation.kind === "job" ? "job_messages" : "direct_messages", result.data || []);
+  await markConversationNotificationsRead(conversation);
+  conversation.unreadCount = 0;
+  const unreadCount = accountMessageConversations.reduce((sum, item) => sum + Number(item.unreadCount || 0), 0);
+  if (byId("accountMessageNavCount")) byId("accountMessageNavCount").textContent = String(unreadCount);
+  const conversationButton = document.querySelector(`.message-conversation[data-conversation-index="${selectedAccountConversationIndex}"]`);
+  conversationButton?.querySelector(".message-unread-count")?.remove();
   container.innerHTML = messages.length
-    ? messages.map((message) => {
-        const isOwn = message.sender_id === currentUser.id;
-        const timestamp = new Date(message.created_at).toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-        return `<div class="chat-message ${isOwn ? "is-own" : "is-other"}">
-          <div>${escapeHtml(message.body)}</div>
-          <span>${isOwn ? "Du" : escapeHtml(conversation.name)} · ${escapeHtml(timestamp)}</span>
-        </div>`;
-      }).join("")
+    ? messages.map((message) => renderChatMessage(message, conversation.name)).join("")
     : `<div class="chat-empty"><strong>Inga meddelanden ännu</strong><span>${conversation.kind === "job" ? "Börja planera jobbet här." : "Skriv en kort fråga för att starta samtalet."}</span></div>`;
   container.scrollTop = container.scrollHeight;
 }
@@ -1290,27 +1366,51 @@ async function loadMyJobs() {
     return { ...job, applications: applicationsWithAvailability, review };
   }));
   assignedJobs = assignedResult.data || [];
+  renderMyJobs();
+}
 
+function setAccountJobFilter(relationship, filter) {
+  if (!Object.hasOwn(accountJobFilters, relationship) || !["active", "completed"].includes(filter)) return;
+  accountJobFilters[relationship] = filter;
+  renderMyJobs();
+}
+
+function renderAccountJobGroup(title, description, jobs, relationship) {
+  const activeJobs = jobs.filter((job) => !["completed", "cancelled"].includes(job.status));
+  const completedJobs = jobs.filter((job) => ["completed", "cancelled"].includes(job.status));
+  const filter = accountJobFilters[relationship] || "active";
+  const visibleJobs = filter === "completed" ? completedJobs : activeJobs;
+  const emptyText = filter === "completed"
+    ? relationship === "owner"
+      ? "Här visas jobb som är slutförda eller avslutade."
+      : "Du har inga slutförda uppdrag ännu."
+    : relationship === "owner"
+      ? "Du har inga aktiva upplagda jobb just nu."
+      : "Du har inget accepterat eller pågående uppdrag just nu.";
+  return `<section class="account-job-group">
+    <div class="account-job-group-head">
+      <div><h4>${escapeHtml(title)}</h4><span>${escapeHtml(description)}</span></div>
+      <span class="status-pill">${jobs.length}</span>
+    </div>
+    <div class="job-filter-tabs" role="tablist" aria-label="Filtrera ${escapeHtml(title.toLowerCase())}">
+      <button class="job-filter-tab ${filter === "active" ? "is-active" : ""}" type="button" role="tab" aria-selected="${filter === "active"}" onclick="setAccountJobFilter('${relationship}', 'active')">Aktiva jobb <span>${activeJobs.length}</span></button>
+      <button class="job-filter-tab ${filter === "completed" ? "is-active" : ""}" type="button" role="tab" aria-selected="${filter === "completed"}" onclick="setAccountJobFilter('${relationship}', 'completed')">Slutförda jobb <span>${completedJobs.length}</span></button>
+    </div>
+    <div class="account-job-filter-content">
+      ${visibleJobs.length
+        ? visibleJobs.map((job) => renderAccountJob(job, relationship)).join("")
+        : `<div class="notice">${escapeHtml(emptyText)}</div>`}
+    </div>
+  </section>`;
+}
+
+function renderMyJobs() {
+  const container = byId("myJobs");
+  if (!container) return;
   const assignedSection = currentProfile?.performer_enabled
-    ? `<section class="account-job-group">
-        <div class="account-job-group-head">
-          <div><h4>Jobb jag utför</h4><span>Accepterade, pågående och slutförda uppdrag</span></div>
-          <span class="status-pill">${assignedJobs.length}</span>
-        </div>
-        ${assignedJobs.length
-          ? assignedJobs.map((job) => renderAccountJob(job, "performer")).join("")
-          : '<div class="notice">Du har inget accepterat eller pågående uppdrag ännu.</div>'}
-      </section>`
+    ? renderAccountJobGroup("Jobb jag utför", "Accepterade, pågående och slutförda uppdrag", assignedJobs, "performer")
     : "";
-  const ownedSection = `<section class="account-job-group">
-      <div class="account-job-group-head">
-        <div><h4>Jobb jag lagt upp</h4><span>Dina förfrågningar och valda utförare</span></div>
-        <span class="status-pill">${ownJobs.length}</span>
-      </div>
-      ${ownJobs.length
-        ? ownJobs.map((job) => renderAccountJob(job, "owner")).join("")
-        : '<div class="notice">Du har inte lagt upp något jobb ännu.</div>'}
-    </section>`;
+  const ownedSection = renderAccountJobGroup("Jobb jag lagt upp", "Dina förfrågningar och valda utförare", ownJobs, "owner");
   container.innerHTML = `${assignedSection}${ownedSection}`;
 }
 
@@ -1656,23 +1756,17 @@ async function loadDirectMessages() {
   const otherId = selectedDirectProfile.id;
   const { data, error } = await supabaseClient
     .from("direct_messages")
-    .select("id, sender_id, recipient_id, body, created_at")
+    .select("id, sender_id, recipient_id, body, read_at, created_at")
     .or(`and(sender_id.eq.${currentUser.id},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${currentUser.id})`)
     .order("created_at", { ascending: true });
   if (error) {
     container.innerHTML = '<div class="notice error">Meddelandena kunde inte hämtas. Databasuppdateringen kan saknas.</div>';
     return;
   }
-  const messages = data || [];
+  const messages = await markMessagesRead("direct_messages", data || []);
+  await markConversationNotificationsRead({ kind: "direct", profileId: otherId });
   container.innerHTML = messages.length
-    ? messages.map((message) => {
-        const isOwn = message.sender_id === currentUser.id;
-        const timestamp = new Date(message.created_at).toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-        return `<div class="chat-message ${isOwn ? "is-own" : "is-other"}">
-          <div>${escapeHtml(message.body)}</div>
-          <span>${isOwn ? "Du" : escapeHtml(selectedDirectProfile.display_name || "Den andra personen")} · ${escapeHtml(timestamp)}</span>
-        </div>`;
-      }).join("")
+    ? messages.map((message) => renderChatMessage(message, selectedDirectProfile.display_name || "Den andra personen")).join("")
     : '<div class="chat-empty"><strong>Inga meddelanden ännu</strong><span>Skriv en kort fråga för att ta första kontakten.</span></div>';
   container.scrollTop = container.scrollHeight;
 }
@@ -1705,23 +1799,17 @@ async function loadJobMessages() {
   if (!container.children.length) container.innerHTML = '<div class="account-meta">Hämtar meddelanden…</div>';
   const { data, error } = await supabaseClient
     .from("job_messages")
-    .select("id, sender_id, body, created_at")
+    .select("id, sender_id, body, read_at, created_at")
     .eq("job_id", selectedChatJobId)
     .order("created_at", { ascending: true });
   if (error) {
     container.innerHTML = '<div class="notice error">Chatten kunde inte hämtas.</div>';
     return;
   }
-  const messages = data || [];
+  const messages = await markMessagesRead("job_messages", data || []);
+  await markConversationNotificationsRead({ kind: "job", jobId: Number(selectedChatJobId) });
   container.innerHTML = messages.length
-    ? messages.map((message) => {
-        const isOwn = message.sender_id === currentUser.id;
-        const timestamp = new Date(message.created_at).toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-        return `<div class="chat-message ${isOwn ? "is-own" : "is-other"}">
-          <div>${escapeHtml(message.body)}</div>
-          <span>${isOwn ? "Du" : selectedChatOtherLabel} · ${escapeHtml(timestamp)}</span>
-        </div>`;
-      }).join("")
+    ? messages.map((message) => renderChatMessage(message, selectedChatOtherLabel)).join("")
     : '<div class="chat-empty"><strong>Starta planeringen här</strong><span>Bestäm tid, plats och praktiska detaljer om jobbet.</span></div>';
   container.scrollTop = container.scrollHeight;
 }
@@ -1751,7 +1839,7 @@ async function sendJobMessage(event) {
 
 async function loadEarnings() {
   if (!currentUser || !currentProfile?.performer_enabled) return;
-  const [jobsResult, reviewsResult] = await Promise.all([
+  const [jobsResult, reviewsResult, goalsResult] = await Promise.all([
     supabaseClient
       .from("jobs")
       .select("id, title, agreed_price_sek, budget_sek, price_type, completed_at")
@@ -1761,7 +1849,12 @@ async function loadEarnings() {
     supabaseClient
       .from("reviews")
       .select("rating")
-      .eq("reviewee_id", currentUser.id)
+      .eq("reviewee_id", currentUser.id),
+    supabaseClient
+      .from("savings_goals")
+      .select("id, name, target_amount_sek, saved_amount_sek, target_date, created_at, updated_at")
+      .eq("user_id", currentUser.id)
+      .order("created_at", { ascending: false })
   ]);
   if (jobsResult.error || reviewsResult.error) {
     if (byId("earningsList")) byId("earningsList").innerHTML = '<div class="notice error">Statistiken kunde inte hämtas.</div>';
@@ -1780,8 +1873,12 @@ async function loadEarnings() {
   if (byId("averageRating")) byId("averageRating").textContent = ratings.length
     ? `${average.toFixed(1).replace(".", ",")} ★ (${ratings.length})`
     : "Inga betyg";
-  if (byId("savingsGoalInput")) byId("savingsGoalInput").value = currentProfile.savings_goal_sek || "";
-  updateGoalProgress(total, Number(currentProfile.savings_goal_sek || 0));
+  if (goalsResult.error) {
+    if (byId("savingsGoalsList")) byId("savingsGoalsList").innerHTML = '<div class="notice error">Sparmålen kunde inte hämtas. Databasuppdateringen kan saknas.</div>';
+  } else {
+    savingsGoals = goalsResult.data || [];
+    renderSavingsGoals();
+  }
   if (byId("earningsList")) {
     byId("earningsList").innerHTML = completedJobs.length
       ? `<strong>Utförda jobb</strong>${completedJobs.map((job) => `
@@ -1793,35 +1890,113 @@ async function loadEarnings() {
   }
 }
 
-function updateGoalProgress(total, goal) {
-  const percent = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0;
-  if (byId("goalProgressBar")) byId("goalProgressBar").style.width = `${percent}%`;
-  if (byId("goalProgressText")) {
-    byId("goalProgressText").textContent = goal > 0
-      ? `${formatCurrency(total)} av ${formatCurrency(goal)} · ${percent}%`
-      : "Inget mål satt ännu.";
-  }
+function savingsGoalPace(goal) {
+  if (!goal.target_date) return "";
+  const remaining = Math.max(0, Number(goal.target_amount_sek) - Number(goal.saved_amount_sek));
+  const targetDate = new Date(`${goal.target_date}T23:59:59`);
+  const daysLeft = Math.ceil((targetDate.getTime() - Date.now()) / 86400000);
+  if (remaining === 0) return "Målet är uppnått";
+  if (daysLeft <= 0) return "Måldatumet har passerat";
+  const monthsLeft = Math.max(1, daysLeft / 30.44);
+  return `Ca ${formatCurrency(Math.ceil(remaining / monthsLeft))}/mån till måldatum`;
 }
 
-async function saveSavingsGoal() {
+function renderSavingsGoals() {
+  const container = byId("savingsGoalsList");
+  if (!container) return;
+  if (!savingsGoals.length) {
+    container.innerHTML = `<div class="savings-empty">
+      <span aria-hidden="true">◎</span>
+      <div><strong>Skapa ditt första sparmål</strong><p>Exempel: “Skidresa Åre”, 15 000 kr i mål, 6 500 kr sparat och ett frivilligt måldatum.</p></div>
+      <button class="btn btn-primary btn-small" type="button" onclick="openSavingsGoalForm()">Skapa sparmål</button>
+    </div>`;
+    return;
+  }
+  container.innerHTML = savingsGoals.map((goal) => {
+    const target = Number(goal.target_amount_sek || 0);
+    const saved = Number(goal.saved_amount_sek || 0);
+    const percent = target > 0 ? Math.min(100, Math.round((saved / target) * 100)) : 0;
+    const remaining = Math.max(0, target - saved);
+    const targetDate = goal.target_date
+      ? new Date(`${goal.target_date}T12:00:00`).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" })
+      : "Inget måldatum";
+    const pace = savingsGoalPace(goal);
+    return `<article class="savings-goal-card">
+      <div class="savings-goal-top"><div><span>Sparmål</span><h4>${escapeHtml(goal.name)}</h4></div><strong>${percent}%</strong></div>
+      <div class="goal-progress" aria-label="${percent} procent av målet"><span style="width:${percent}%"></span></div>
+      <div class="savings-goal-amount"><strong>${formatCurrency(saved)}</strong><span>av ${formatCurrency(target)}</span></div>
+      <div class="savings-goal-facts"><span>${remaining ? `${formatCurrency(remaining)} kvar` : "Målet är nått"}</span><span>${escapeHtml(targetDate)}</span>${pace ? `<span>${escapeHtml(pace)}</span>` : ""}</div>
+      <div class="savings-goal-actions"><button class="link-button" type="button" onclick="openSavingsGoalForm(${goal.id})">Redigera</button><button class="link-button danger-link" type="button" onclick="deleteSavingsGoal(${goal.id})">Ta bort</button></div>
+    </article>`;
+  }).join("");
+}
+
+function openSavingsGoalForm(goalId = null) {
+  const goal = savingsGoals.find((item) => Number(item.id) === Number(goalId));
+  editingSavingsGoalId = goal ? Number(goal.id) : null;
+  if (byId("savingsGoalFormTitle")) byId("savingsGoalFormTitle").textContent = goal ? "Redigera sparmål" : "Nytt sparmål";
+  if (byId("savingsGoalName")) byId("savingsGoalName").value = goal?.name || "";
+  if (byId("savingsGoalTarget")) byId("savingsGoalTarget").value = goal?.target_amount_sek || "";
+  if (byId("savingsGoalSaved")) byId("savingsGoalSaved").value = goal?.saved_amount_sek || "";
+  if (byId("savingsGoalDate")) byId("savingsGoalDate").value = goal?.target_date || "";
+  byId("savingsGoalForm")?.classList.remove("hidden");
+  setNotice("savingsGoalNotice");
+  setTimeout(() => byId("savingsGoalName")?.focus(), 50);
+}
+
+function closeSavingsGoalForm() {
+  editingSavingsGoalId = null;
+  byId("savingsGoalForm")?.classList.add("hidden");
+  byId("savingsGoalForm")?.reset();
+  setNotice("savingsGoalNotice");
+}
+
+async function saveSavingsGoal(event) {
+  event?.preventDefault();
   if (!currentUser || !currentProfile) return;
-  const goal = parseBudget(byId("savingsGoalInput")?.value || "");
-  if (!goal) {
-    setNotice("accountNotice", "Ange ett sparmål i kronor.", "error");
+  const name = byId("savingsGoalName")?.value.trim() || "";
+  const target = parseBudget(byId("savingsGoalTarget")?.value || "");
+  const saved = parseBudget(byId("savingsGoalSaved")?.value || "") || 0;
+  const targetDate = byId("savingsGoalDate")?.value || null;
+  if (name.length < 2 || !target) {
+    setNotice("savingsGoalNotice", "Ange ett namn och ett målbelopp i kronor.", "error");
     return;
   }
   setLoading("saveGoalBtn", true, "Sparar…", "Spara mål");
-  const { error } = await supabaseClient
-    .from("profiles")
-    .update({ savings_goal_sek: goal })
-    .eq("id", currentUser.id);
+  const payload = {
+    user_id: currentUser.id,
+    name,
+    target_amount_sek: target,
+    saved_amount_sek: saved,
+    target_date: targetDate
+  };
+  const request = editingSavingsGoalId
+    ? supabaseClient.from("savings_goals").update(payload).eq("id", editingSavingsGoalId).eq("user_id", currentUser.id)
+    : supabaseClient.from("savings_goals").insert(payload);
+  const { error } = await request;
   setLoading("saveGoalBtn", false, "Sparar…", "Spara mål");
   if (error) {
-    setNotice("accountNotice", "Sparmålet kunde inte sparas.", "error");
+    setNotice("savingsGoalNotice", "Sparmålet kunde inte sparas.", "error");
     return;
   }
-  currentProfile.savings_goal_sek = goal;
+  closeSavingsGoalForm();
   setNotice("accountNotice", "Sparmålet har sparats.", "success");
+  await loadEarnings();
+}
+
+async function deleteSavingsGoal(goalId) {
+  const goal = savingsGoals.find((item) => Number(item.id) === Number(goalId));
+  if (!goal || !window.confirm(`Ta bort sparmålet ”${goal.name}”?`)) return;
+  const { error } = await supabaseClient
+    .from("savings_goals")
+    .delete()
+    .eq("id", goalId)
+    .eq("user_id", currentUser.id);
+  if (error) {
+    setNotice("accountNotice", "Sparmålet kunde inte tas bort.", "error");
+    return;
+  }
+  setNotice("accountNotice", "Sparmålet har tagits bort.", "success");
   await loadEarnings();
 }
 

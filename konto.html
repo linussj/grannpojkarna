@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mitt konto – Grannpojkarna</title>
+  <meta name="description" content="Hantera dina jobb, meddelanden och din profil på Grannpojkarna." />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="account">
+<header>
+  <div class="wrap">
+    <nav>
+      <a href="index.html" class="logo">
+        <span class="logo-mark">G</span>
+        <span>Grannpojkarna</span>
+      </a>
+      <div class="navlinks">
+        <a href="jobb.html">Hitta jobb</a>
+        <a href="index.html#tjanster">Tjänster</a>
+        <a href="index.html#sa-funkar-det">Så fungerar det</a>
+        <a href="index.html#personlig-hjalp">Personlig hjälp</a>
+      </div>
+      <div class="nav-actions">
+        <button class="notification-button hidden" id="notificationButton" type="button" onclick="toggleNotificationCenter()" aria-label="Öppna notiser" aria-expanded="false">
+          <span aria-hidden="true">🔔</span>
+          <span class="notification-badge hidden" id="notificationBadge">0</span>
+        </button>
+        <button class="btn btn-light" id="accountBtn" onclick="handleAccountButton()">Logga in</button>
+        <a class="btn btn-primary desktop-primary" href="index.html?newJob=1">Lägg upp jobb</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<aside class="notification-center hidden" id="notificationCenter" aria-label="Notiser">
+  <div class="notification-center-head">
+    <div><strong>Notiser</strong><span>Det senaste på ditt konto</span></div>
+    <button class="link-button" id="markAllNotificationsBtn" type="button" onclick="markAllNotificationsRead()">Markera alla som lästa</button>
+  </div>
+  <div class="notification-list" id="notificationList">
+    <div class="account-meta">Hämtar notiser…</div>
+  </div>
+</aside>
+
+<main class="account-page-main">
+  <section class="account-page-loading wrap" id="accountPageLoading">
+    <div class="account-loading-card"><span class="account-loading-mark">G</span><strong>Hämtar ditt konto…</strong></div>
+  </section>
+
+  <section class="account-guest hidden" id="accountPageGuest">
+    <div class="wrap account-guest-wrap">
+      <div class="account-guest-copy">
+        <span class="eyebrow">Mitt konto</span>
+        <h1>Allt samlat på ett ställe.</h1>
+        <p>Logga in för att se dina jobb, fortsätta konversationer och uppdatera din profil.</p>
+        <button class="btn btn-primary" type="button" onclick="openAccountModal('customer')">Logga in eller skapa konto</button>
+      </div>
+      <div class="account-guest-preview" aria-hidden="true">
+        <div class="guest-preview-head"><span>G</span><strong>Ditt konto</strong></div>
+        <div class="guest-preview-row"><span>💬</span><div><strong>Meddelanden</strong><small>Jobbchattar och privata samtal</small></div></div>
+        <div class="guest-preview-row"><span>✓</span><div><strong>Mina jobb</strong><small>Följ uppdrag från start till klart</small></div></div>
+        <div class="guest-preview-row"><span>●</span><div><strong>Min profil</strong><small>Visa vem du är och vad du kan</small></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="account-page-content hidden" id="accountPageContent">
+    <div class="wrap account-page-shell">
+      <aside class="account-sidebar">
+        <div class="account-sidebar-identity">
+          <div class="account-avatar account-avatar-large" id="accountAvatar" aria-hidden="true">G</div>
+          <div>
+            <h1 id="accountName">Mitt konto</h1>
+            <div class="account-meta" id="accountEmail"></div>
+            <span class="status-pill" id="accountRole">Beställare</span>
+          </div>
+        </div>
+
+        <div class="availability-menu-wrap hidden" id="availabilityMenuWrap">
+          <button class="availability-status-button account-availability-button" id="availabilityStatusButton" type="button" onclick="toggleAvailabilityMenu()" aria-expanded="false">
+            <span class="availability-dot" aria-hidden="true"></span>
+            <span id="availabilityStatusText">Sätt tillgänglighet</span>
+          </button>
+          <div class="availability-popover hidden" id="availabilityPopover">
+            <strong>Extra synlighet</strong>
+            <span id="availabilityExpiry">Visa att du kan hjälpa till med kort varsel.</span>
+            <div class="availability-actions">
+              <button class="btn btn-primary btn-small" id="availabilityNowBtn" type="button" onclick="saveAvailabilityStatus('now')">Jag kan hjälpa nu</button>
+              <button class="btn btn-light btn-small" id="availabilityTodayBtn" type="button" onclick="saveAvailabilityStatus('today')">Jag kan hjälpa idag</button>
+              <button class="link-button hidden" id="clearAvailabilityBtn" type="button" onclick="saveAvailabilityStatus('unavailable')">Ta bort min status</button>
+            </div>
+          </div>
+        </div>
+
+        <nav class="account-page-nav" role="tablist" aria-label="Kontosidor">
+          <button class="account-tab active" id="accountTabJobs" type="button" role="tab" aria-selected="true" aria-controls="accountJobsPanel" onclick="showAccountTab('jobs')"><span aria-hidden="true">⌂</span>Mina jobb</button>
+          <button class="account-tab" id="accountTabMessages" type="button" role="tab" aria-selected="false" aria-controls="accountMessagesPanel" onclick="showAccountTab('messages')"><span aria-hidden="true">✉</span>Meddelanden <em id="accountMessageNavCount">0</em></button>
+          <button class="account-tab" id="accountTabProfile" type="button" role="tab" aria-selected="false" aria-controls="accountProfilePanel" onclick="showAccountTab('profile')"><span aria-hidden="true">●</span>Min profil</button>
+          <button class="account-tab hidden" id="accountTabEarnings" type="button" role="tab" aria-selected="false" aria-controls="accountEarningsPanel" onclick="showAccountTab('earnings')"><span aria-hidden="true">↗</span>Intjänat</button>
+        </nav>
+
+        <button class="account-sidebar-logout" type="button" onclick="signOut()">Logga ut</button>
+      </aside>
+
+      <div class="account-workspace">
+        <div class="profile-prompt" id="profilePrompt">
+          <div><strong>Förbättra dina chanser</strong><span id="profilePromptText">Lägg till en bild och en kort presentation.</span></div>
+          <button class="btn btn-light btn-small" type="button" onclick="showAccountTab('profile')">Förbättra profil</button>
+        </div>
+
+        <section class="account-panel" id="accountJobsPanel" role="tabpanel" aria-labelledby="accountTabJobs">
+          <div class="account-panel-heading">
+            <div><span class="eyebrow">Översikt</span><h2>Mina jobb</h2><p>Hantera jobb du lagt upp och uppdrag du utför.</p></div>
+            <div class="account-actions">
+              <button class="btn btn-primary" onclick="openJobFromAccount()">Lägg upp jobb</button>
+              <a class="btn btn-light hidden" id="findJobsBtn" href="jobb.html">Hitta jobb</a>
+              <button class="btn btn-light" id="enablePerformerBtn" onclick="showPerformerStep()">Aktivera utförarprofil</button>
+            </div>
+          </div>
+          <div class="job-list" id="myJobs"></div>
+        </section>
+
+        <section class="account-panel hidden" id="accountMessagesPanel" role="tabpanel" aria-labelledby="accountTabMessages">
+          <div class="account-panel-heading">
+            <div><span class="eyebrow">Inkorg</span><h2>Meddelanden</h2><p>Jobbchattar och privata samtal samlade på ett ställe.</p></div>
+            <button class="btn btn-light btn-small" type="button" onclick="loadAccountMessages()">Uppdatera</button>
+          </div>
+          <div class="account-message-layout">
+            <div class="account-inbox-column">
+              <div class="message-center-list" id="accountMessagesList"></div>
+            </div>
+            <section class="account-conversation-pane" id="accountConversationPane" aria-label="Vald konversation">
+              <div class="account-conversation-head">
+                <div><h3 id="accountConversationTitle">Välj en konversation</h3><p id="accountConversationContext">Dina meddelanden visas här.</p></div>
+              </div>
+              <div class="chat-messages account-conversation-messages" id="accountConversationMessages" aria-live="polite">
+                <div class="chat-empty"><strong>Ingen konversation vald</strong><span>Välj ett samtal i listan för att läsa och svara.</span></div>
+              </div>
+              <form class="chat-form hidden" id="accountConversationForm" onsubmit="sendAccountConversationMessage(event)">
+                <label class="visually-hidden" for="accountConversationInput">Skriv ett meddelande</label>
+                <textarea id="accountConversationInput" rows="2" maxlength="2000" placeholder="Skriv ett meddelande…" required></textarea>
+                <button class="btn btn-primary" id="accountConversationSendBtn" type="submit">Skicka</button>
+              </form>
+              <div class="notice hidden" id="accountConversationNotice" role="status"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="account-panel hidden" id="accountProfilePanel" role="tabpanel" aria-labelledby="accountTabProfile">
+          <div class="account-panel-heading"><div><span class="eyebrow">Presentation</span><h2>Min profil</h2><p>Uppgifterna hjälper andra att känna sig trygga med att välja dig.</p></div></div>
+          <div class="profile-editor account-profile-editor">
+            <div class="avatar-editor">
+              <div class="account-avatar account-avatar-large" id="profileAvatarPreview" aria-hidden="true">G</div>
+              <div><label class="btn btn-light btn-small" for="profileAvatarInput">Välj profilbild</label><input class="visually-hidden" id="profileAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" /><div class="account-meta">Frivilligt · JPG, PNG eller WebP · max 5 MB</div></div>
+            </div>
+            <div class="field"><label for="editProfileName">Namn</label><input id="editProfileName" maxlength="100" autocomplete="name" /></div>
+            <div class="field"><label for="editProfileBio">Kort beskrivning <span class="optional-label">Frivilligt</span></label><textarea id="editProfileBio" rows="5" maxlength="600" placeholder="Berätta kort vem du är, vad du är bra på och hur du brukar hjälpa till"></textarea></div>
+            <div id="performerProfileFields">
+              <div class="field"><label for="editProfileArea">Område</label><input id="editProfileArea" maxlength="120" placeholder="Exempel: Upplands Väsby med omnejd" /></div>
+              <div class="field"><label for="editProfileSkills">Vad kan du hjälpa till med?</label><input id="editProfileSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" /></div>
+            </div>
+            <div class="profile-save-row"><button class="btn btn-primary" id="saveOptionalProfileBtn" type="button" onclick="saveOptionalProfile()">Spara profil</button><div><div class="profile-progress"><span id="profileProgressBar"></span></div><div class="account-meta" id="profileProgressText"></div></div></div>
+          </div>
+        </section>
+
+        <section class="account-panel hidden" id="accountEarningsPanel" role="tabpanel" aria-labelledby="accountTabEarnings">
+          <div class="account-panel-heading"><div><span class="eyebrow">Resultat</span><h2>Intjänat</h2><p>Följ dina slutförda jobb, betyg och ditt sparmål.</p></div></div>
+          <div class="earnings-grid"><div class="stat-card"><span>Totalt intjänat</span><strong id="totalEarnings">0 kr</strong></div><div class="stat-card"><span>Utförda jobb</span><strong id="completedJobsCount">0</strong></div><div class="stat-card"><span>Ditt betyg</span><strong id="averageRating">–</strong></div></div>
+          <div class="goal-card"><div><h4>Mitt sparmål</h4><p>Sätt ett frivilligt mål och följ hur långt dina utförda jobb har tagit dig.</p></div><div class="goal-controls"><input id="savingsGoalInput" inputmode="numeric" placeholder="Exempel: 10 000 kr" /><button class="btn btn-primary btn-small" id="saveGoalBtn" type="button" onclick="saveSavingsGoal()">Spara mål</button></div><div class="goal-progress"><span id="goalProgressBar"></span></div><div class="account-meta" id="goalProgressText">Inget mål satt ännu.</div></div>
+          <div class="earnings-list" id="earningsList"></div>
+        </section>
+
+        <div class="notice hidden" id="accountNotice" role="status"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap footer-grid"><div><div class="logo"><span class="logo-mark">G</span><span>Grannpojkarna</span></div><p class="tagline">Hjälpen finns runt hörnet.</p></div><div><strong>Behöver du hjälp?</strong><p><a href="mailto:info@grannpojkarna.se">info@grannpojkarna.se</a></p></div></div></footer>
+
+<div class="modal" id="accountModal">
+  <div class="dialog account-auth-dialog">
+    <div class="dialog-top"><h3 id="accountTitle">Logga in eller skapa konto</h3><button class="close" onclick="closeAccountModal()" aria-label="Stäng">×</button></div>
+    <form id="authEmailStep" class="auth-stack" onsubmit="sendLoginCode(event)">
+      <p class="auth-intro">Ange din mejladress så skickar vi en sexsiffrig engångskod.</p>
+      <div class="field"><label for="authEmail">Mejladress</label><input id="authEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" enterkeyhint="send" placeholder="du@exempel.se" required /></div>
+      <button class="btn btn-primary" id="sendCodeBtn" type="submit">Skicka kod</button><div class="notice hidden" id="authEmailNotice" role="status"></div>
+    </form>
+    <form id="authCodeStep" class="auth-stack hidden" onsubmit="verifyLoginCode(event)">
+      <p class="auth-intro">Vi har skickat en kod till <strong id="codeEmail"></strong>.</p>
+      <div class="field"><label for="authCode">Sexsiffrig kod</label><input id="authCode" name="one-time-code" type="text" inputmode="numeric" autocomplete="one-time-code" autocapitalize="none" pattern="[0-9]{6}" maxlength="6" enterkeyhint="done" placeholder="123456" required /></div>
+      <button class="btn btn-primary" id="verifyCodeBtn" type="submit">Verifiera och fortsätt</button>
+      <div class="auth-code-actions"><button class="link-button" id="resendCodeBtn" type="button" onclick="resendLoginCode()">Skicka ny kod</button><button class="link-button" type="button" onclick="showEmailStep(true)">Använd en annan mejladress</button></div>
+      <div class="account-meta" id="resendCodeHelp">Koden kan fyllas i automatiskt av din mobil eller webbläsare.</div><div class="notice hidden" id="authCodeNotice" role="status"></div>
+    </form>
+    <div id="profileStep" class="auth-stack hidden">
+      <p class="auth-intro">Berätta hur du vill använda Grannpojkarna.</p>
+      <div class="field"><label for="profileName">Namn</label><input id="profileName" autocomplete="name" placeholder="För- och efternamn" required /></div>
+      <div class="field"><label for="profilePhone">Telefonnummer</label><input id="profilePhone" type="tel" autocomplete="tel" placeholder="070-123 45 67" /></div>
+      <div class="field"><label for="profileAccountType">Kontotyp</label><select id="profileAccountType"><option value="private">Privatperson</option><option value="company">Företag</option></select></div>
+      <div class="field"><label>Hur vill du använda Grannpojkarna?</label><div class="choice-grid"><div class="choice"><input type="radio" name="profileUse" id="profileUseCustomer" value="customer" checked /><label for="profileUseCustomer"><strong>Beställa</strong><span>Lägga upp jobb</span></label></div><div class="choice"><input type="radio" name="profileUse" id="profileUsePerformer" value="performer" /><label for="profileUsePerformer"><strong>Utföra</strong><span>Hitta och söka jobb</span></label></div><div class="choice"><input type="radio" name="profileUse" id="profileUseBoth" value="both" /><label for="profileUseBoth"><strong>Båda</strong><span>Beställa och utföra</span></label></div></div></div>
+      <button class="btn btn-primary" id="saveProfileBtn" onclick="saveProfile()">Skapa konto</button><div class="notice hidden" id="profileNotice" role="status"></div>
+    </div>
+    <div id="performerStep" class="auth-stack hidden">
+      <p class="auth-intro">Aktivera din utförarprofil för att kunna anmäla intresse för jobb.</p>
+      <div class="field"><label for="performerArea">Område</label><input id="performerArea" maxlength="120" placeholder="Exempel: Upplands Väsby med omnejd" /></div>
+      <div class="field"><label for="performerSkills">Vad kan du hjälpa till med?</label><input id="performerSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" /></div>
+      <div class="field"><label for="performerBio">Kort presentation</label><textarea id="performerBio" rows="4" maxlength="600" placeholder="Berätta kort om dig och din erfarenhet"></textarea></div>
+      <button class="btn btn-primary" id="savePerformerBtn" onclick="savePerformerProfile()">Aktivera utförarprofil</button><button class="btn btn-light" onclick="closeAccountModal()">Avbryt</button><div class="notice hidden" id="performerNotice" role="status"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal chat-modal" id="jobChatModal"><div class="dialog chat-dialog"><div class="dialog-top"><div><h3>Jobbchatt</h3><p class="auth-intro" id="jobChatTitle"></p><p class="chat-participant" id="jobChatParticipant"></p></div><button class="close" type="button" onclick="closeJobChat()" aria-label="Stäng">×</button></div><div class="chat-messages" id="jobChatMessages" aria-live="polite"></div><form class="chat-form" id="jobChatForm" onsubmit="sendJobMessage(event)"><label class="visually-hidden" for="jobChatInput">Skriv ett meddelande</label><textarea id="jobChatInput" rows="2" maxlength="2000" placeholder="Skriv till den andra personen…" required></textarea><button class="btn btn-primary" id="jobChatSendBtn" type="submit">Skicka</button></form><div class="notice hidden" id="jobChatNotice" role="status"></div></div></div>
+
+<div class="modal profile-public-modal" id="performerProfileModal"><div class="dialog public-profile-dialog"><div class="dialog-top"><div><span class="eyebrow" id="publicProfileEyebrow">Utförarprofil</span><h3 id="publicProfileTitle">Utförare</h3></div><button class="close" type="button" onclick="closePerformerProfile()" aria-label="Stäng">×</button></div><div id="publicProfileContent" class="public-profile-content"></div><section class="direct-message-panel" id="directMessagePanel"><div><h4 id="directMessageHeading">Skicka meddelande</h4><p class="account-meta" id="directMessageIntro">Fråga om tillgänglighet eller berätta kort vad du behöver hjälp med.</p></div><div class="chat-messages direct-message-list" id="directMessageMessages" aria-live="polite"></div><form class="chat-form" id="directMessageForm" onsubmit="sendDirectMessage(event)"><label class="visually-hidden" for="directMessageInput">Skriv ett meddelande</label><textarea id="directMessageInput" rows="2" maxlength="2000" placeholder="Hej! Jag behöver hjälp med…" required></textarea><button class="btn btn-primary" id="directMessageSendBtn" type="submit">Skicka</button></form><div class="notice hidden" id="directMessageNotice" role="status"></div></section></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

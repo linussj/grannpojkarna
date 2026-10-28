@@ -415,8 +415,10 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .account-sidebar{position:sticky;top:98px;display:grid;gap:16px;padding:20px;border:1px solid var(--line);border-radius:24px;background:white;box-shadow:0 14px 42px rgba(23,55,40,.08)}
 .account-sidebar-identity{display:grid;grid-template-columns:auto minmax(0,1fr);gap:13px;align-items:center;padding-bottom:16px;border-bottom:1px solid var(--line)}
 .account-sidebar-identity .account-avatar{width:60px;height:60px;border-radius:18px}
+.account-sidebar-identity>div{min-width:0}
 .account-sidebar-identity h1{margin:0 0 2px;font-size:1.1rem;line-height:1.2;overflow:hidden;text-overflow:ellipsis}
-.account-sidebar-identity .status-pill{display:inline-flex;margin-top:8px;font-size:.7rem}
+.account-sidebar-identity .account-meta{overflow-wrap:anywhere}
+.account-sidebar-identity .status-pill{grid-column:1/-1;display:inline-flex;justify-self:start;max-width:100%;margin-top:0;font-size:.7rem;line-height:1.3;white-space:normal;overflow-wrap:anywhere}
 .account-availability-button{width:100%;justify-content:center;padding:9px 11px}
 .account-page-nav{display:grid;gap:5px}
 .account-page-nav .account-tab{width:100%;display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:8px;border:0;border-radius:13px;padding:11px 12px;text-align:left;color:var(--muted)}

@@ -116,15 +116,21 @@
           <label for="filterTiming">När?</label>
           <select id="filterTiming">
             <option value="">När som helst</option>
-            <option>Idag</option>
-            <option>Imorgon</option>
-            <option>Den här veckan</option>
-            <option>Välj datum senare</option>
+            <option value="today">Idag</option>
+            <option value="tomorrow">Imorgon</option>
+            <option value="week">Den här veckan</option>
+            <option value="later">Datum bestäms senare</option>
           </select>
         </div>
         <div class="field">
           <label for="filterMinBudget">Minsta ersättning</label>
           <input id="filterMinBudget" type="number" min="0" step="100" placeholder="0 kr" />
+        </div>
+        <div class="job-watch-card">
+          <span aria-hidden="true">✉</span>
+          <div><strong>Bevaka den här sökningen</strong><p>Få mejl när ett nytt jobb matchar filtren ovan.</p></div>
+          <button class="btn btn-primary btn-small" id="saveJobAlertBtn" type="button" onclick="saveCurrentJobAlert()">Skapa bevakning</button>
+          <div class="notice hidden" id="jobAlertNotice" role="status"></div>
         </div>
       </aside>
 
@@ -169,9 +175,10 @@
     <div>
       <div class="logo" style="margin-bottom:10px"><span class="logo-mark">G</span><span>Grannpojkarna</span></div>
       <div class="tagline">Hjälpen finns runt hörnet.</div>
+      <div class="footer-pilot">Pilotprojekt under uppbyggnad · ännu utan organisationsnummer</div>
     </div>
-    <div>© 2026 Grannpojkarna · Pilot</div>
-    <div><a href="mailto:info@grannpojkarna.se">info@grannpojkarna.se</a></div>
+    <div class="footer-links"><strong>Tryggt och tydligt</strong><a href="villkor.html">Användarvillkor</a><a href="integritet.html">Integritet och kakor</a><a href="trygghet.html">Trygghet och anmälan</a></div>
+    <div><strong>Kontakt</strong><p><a href="mailto:info@grannpojkarna.se">info@grannpojkarna.se</a></p><span>© 2026 Grannpojkarna</span></div>
   </div>
 </footer>
 
@@ -277,6 +284,10 @@
           </div>
         </div>
       </div>
+      <details class="onboarding-tips" open>
+        <summary>Bra att tänka på</summary>
+        <ul><li>Läs hela jobbannonsen och fråga beställaren om något är oklart.</li><li>Kom överens om pris, tid och omfattning innan jobbet börjar.</li><li>Håll kommunikationen i Grannpojkarna så att överenskommelsen finns kvar.</li></ul>
+      </details>
       <button class="btn btn-primary" id="saveProfileBtn" onclick="saveProfile()">Skapa konto</button>
       <div class="notice hidden" id="profileNotice" role="status"></div>
     </div>

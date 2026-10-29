@@ -143,7 +143,8 @@ section{padding:84px 0}
 .callback-fab-copy strong{font-size:1rem;font-weight:900}
 .callback-fab-copy small{margin-top:3px;font-size:.75rem;color:#e6f0ea;font-weight:650}
 footer{padding:44px 0 60px;color:var(--muted)}
-.footer-grid{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap}
+.footer-grid{display:grid;grid-template-columns:minmax(250px,1.25fr) minmax(180px,.75fr) minmax(220px,.75fr);gap:34px;align-items:start}
+.footer-grid>div{min-width:0}.footer-grid p{margin:7px 0}.footer-pilot{max-width:330px;margin-top:8px;font-size:.76rem;line-height:1.45}.footer-links{display:grid;gap:7px}.footer-links strong{color:var(--ink);margin-bottom:2px}.footer-links a:hover{text-decoration:underline;color:var(--brand-dark)}
 .tagline{font-weight:800;color:var(--ink)}
 .modal{position:fixed;inset:0;background:rgba(9,20,14,.58);display:none;align-items:center;justify-content:center;padding:20px;z-index:40;overflow:auto}
 .modal.show{display:flex}
@@ -176,6 +177,16 @@ footer{padding:44px 0 60px;color:var(--muted)}
 .field{display:grid;gap:7px}
 .field.full{grid-column:1/-1}
 .field-help{font-size:.78rem;color:var(--muted);line-height:1.4}
+.date-range-fields{grid-template-columns:1fr 1fr;gap:14px;padding:14px;border:1px solid var(--line);border-radius:16px;background:#f8faf8}
+.job-tips-card,.onboarding-tips{border:1px solid #cfe0d5;border-radius:16px;background:#f4faf6;padding:14px 16px;color:var(--ink)}
+.job-tips-card summary,.onboarding-tips summary{cursor:pointer;font-weight:900;color:var(--brand-dark)}
+.job-tips-card p{margin:9px 0 6px;color:var(--muted)}.job-tips-card ul,.onboarding-tips ul{margin:8px 0 0;padding-left:20px;color:var(--muted)}.job-tips-card li+li,.onboarding-tips li+li{margin-top:5px}
+.job-quality-card{padding:16px;border:1px solid var(--line);border-radius:18px;background:#fbfcfb}
+.job-quality-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.job-quality-head>div{display:grid;gap:2px}.job-quality-head span{font-size:.75rem;color:var(--muted)}.job-quality-head>strong{font-size:1.15rem;color:var(--brand-dark)}
+.job-quality-track{height:10px;margin:12px 0;background:#e3eae5;border-radius:999px;overflow:hidden}.job-quality-track span{display:block;width:0;height:100%;background:var(--brand);border-radius:inherit;transition:width .25s ease}
+.job-quality-card ul{display:grid;gap:4px;margin:0;padding-left:19px;color:var(--muted);font-size:.82rem}
+.job-image-preview{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.job-image-thumb{position:relative;aspect-ratio:1;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:#eef3ef}.job-image-thumb img{width:100%;height:100%;object-fit:cover}.job-image-thumb button{position:absolute;right:5px;top:5px;width:29px;height:29px;border:0;border-radius:9px;background:rgba(20,38,29,.82);color:white;cursor:pointer;font-weight:900}
 label{font-weight:800;font-size:.92rem}
 input,textarea,select{width:100%;border:1px solid var(--line);border-radius:12px;padding:13px 14px;outline:none;background:white;color:var(--ink)}
 input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3px rgba(47,107,79,.09)}
@@ -331,6 +342,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .earning-row{display:flex;justify-content:space-between;gap:14px;padding:12px 3px;border-bottom:1px solid var(--line)}
 .earning-row:last-child{border-bottom:0}
 .status-pill{background:var(--brand-soft);color:var(--brand-dark);font-size:.8rem;font-weight:800;padding:5px 9px;border-radius:999px;white-space:nowrap}
+.trust-badge,.identity-badge{display:inline-flex;align-items:center;gap:6px;width:max-content;padding:6px 9px;border-radius:999px;font-size:.76rem;font-weight:900}.trust-badge{background:#fff5cf;color:#765900;border:1px solid #ead48b}.identity-badge{background:#edf2ef;color:var(--muted);border:1px solid var(--line)}
 .link-button{border:0;background:none;padding:0;color:var(--brand);font-weight:800;cursor:pointer;text-decoration:underline}
 
 /* Privat chatt för accepterade jobb */
@@ -388,6 +400,9 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .feed-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
 .feed-card h2{font-size:1.35rem;margin:7px 0 6px;line-height:1.2}
 .feed-card p{color:var(--muted);margin:12px 0 18px}
+.job-card-images{display:grid;grid-template-columns:2fr 1fr 1fr;gap:7px;margin:14px 0}.job-card-images img{width:100%;height:118px;object-fit:cover;border-radius:13px;background:#edf2ef}.job-card-images img:first-child{height:118px}.job-card-images.is-single{grid-template-columns:1fr}.job-card-images.is-single img{height:min(260px,34vw)}
+.job-card-image-more{min-height:118px;border-radius:13px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand-dark);font-weight:900}
+.job-watch-card{display:grid;grid-template-columns:auto 1fr;gap:9px;padding:14px;border:1px solid #c9ddcf;border-radius:16px;background:#f2f8f4}.job-watch-card>span{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:white;color:var(--brand);font-weight:900}.job-watch-card p{margin:2px 0 0;color:var(--muted);font-size:.76rem;line-height:1.4}.job-watch-card .btn,.job-watch-card .notice{grid-column:1/-1;width:100%;margin-top:2px}
 .feed-card-footer{display:flex;justify-content:space-between;align-items:center;gap:18px;border-top:1px solid var(--line);padding-top:16px}
 .feed-price{font-weight:900;color:var(--brand-dark);font-size:1.12rem}
 .empty-state{border:1px dashed #bdcdc3;border-radius:24px;padding:48px 24px;text-align:center;background:#fbfcfb}
@@ -467,6 +482,17 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
 .account-conversation-head h3{margin:0 0 3px;font-size:1.15rem}.account-conversation-head p{margin:0;color:var(--brand-dark);font-size:.8rem;font-weight:800}
 .account-conversation-messages{min-height:300px;max-height:440px;background:#f1f5f2}
 .account-profile-editor{max-width:760px}.profile-save-row{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}.profile-save-row>div{display:grid;gap:6px}
+.account-settings-card{max-width:760px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;margin-top:18px;padding:18px;border:1px solid var(--line);border-radius:18px;background:#fbfcfb}.account-settings-card h3{margin:0 0 3px;font-size:1.05rem}.account-settings-card p{margin:0;color:var(--muted);font-size:.84rem}.account-settings-card>a{justify-self:end}.privacy-settings{background:#fffaf8}.job-alerts-list{grid-column:1/-1;display:grid;gap:8px}.job-alert-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 12px;border:1px solid var(--line);border-radius:13px;background:white}.job-alert-row>div{display:grid;gap:2px}.job-alert-row span{font-size:.78rem;color:var(--muted)}
+.job-agreement{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.job-agreement>div{padding:10px;border:1px solid var(--line);border-radius:12px;background:white}.job-agreement span{display:block;font-size:.7rem;color:var(--muted);font-weight:800}.job-agreement strong{display:block;margin-top:2px;font-size:.84rem;overflow-wrap:anywhere}
+
+/* Juridik och trygghetscenter */
+.legal-page{min-height:70vh;background:linear-gradient(180deg,#f4f7f5,#fff 480px)}
+.legal-shell{display:grid;grid-template-columns:250px minmax(0,780px);gap:50px;align-items:start;padding-top:62px;padding-bottom:90px}
+.legal-nav{position:sticky;top:105px;display:grid;gap:6px;padding:17px;border:1px solid var(--line);border-radius:18px;background:white}.legal-nav strong{margin-bottom:6px}.legal-nav a{padding:9px 10px;border-radius:10px;color:var(--muted);font-size:.86rem;font-weight:750}.legal-nav a:hover,.legal-nav a.active{background:var(--brand-soft);color:var(--brand-dark)}
+.legal-content h1{font-size:clamp(2.8rem,6vw,4.8rem);margin:18px 0 20px}.legal-content h2{margin:34px 0 10px;font-size:1.35rem}.legal-content p,.legal-content li{color:var(--muted)}.legal-content a{color:var(--brand);font-weight:750;text-decoration:underline}.legal-lead{font-size:1.15rem;line-height:1.65}.legal-content ul{padding-left:22px}.legal-content li+li{margin-top:7px}
+.legal-callout{margin:26px 0;padding:20px;border:1px solid #c9ddcf;border-radius:18px;background:var(--brand-soft)}.legal-callout p{margin:5px 0 0;color:#45584e}
+.safety-grid{display:grid;gap:12px;margin:26px 0}.safety-grid section{display:grid;grid-template-columns:auto 1fr;gap:15px;padding:18px;border:1px solid var(--line);border-radius:18px;background:white}.safety-grid section>span{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--brand);color:white;font-weight:900}.safety-grid h2{margin:0 0 4px}.safety-grid p{margin:0}
+.badge-explainer{display:grid;grid-template-columns:1fr 1fr;gap:12px}.badge-explainer>div{display:grid;gap:9px;align-content:start;padding:18px;border:1px solid var(--line);border-radius:17px;background:#fbfcfb}.badge-explainer p{margin:0;font-size:.86rem}
 .account-auth-dialog{max-width:620px}
 
 @media(max-width:1000px){
@@ -497,6 +523,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .account-sidebar-logout{text-align:center}
   .account-guest-wrap{grid-template-columns:1fr;gap:38px}
   .account-guest-preview{max-width:620px}
+  .legal-shell{grid-template-columns:1fr;gap:26px;padding-top:36px}.legal-nav{position:static;grid-template-columns:repeat(3,1fr)}.legal-nav strong{grid-column:1/-1}
 }
 @media(max-width:640px){
   .wrap{padding:0 16px}
@@ -505,7 +532,7 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .nav-actions .btn-light{padding:10px 13px}
   h1{font-size:3.4rem}
   section{padding:60px 0}
-  .form-grid,.choice-grid{grid-template-columns:1fr}
+  .form-grid,.choice-grid,.date-range-fields{grid-template-columns:1fr}
   .field.full{grid-column:auto}
   .callback-card{grid-template-columns:1fr;padding:26px;text-align:left}
   .callback-icon{width:54px;height:54px}
@@ -558,6 +585,9 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   .account-conversation-pane{grid-template-rows:auto minmax(280px,auto) auto auto;scroll-margin-top:82px}
   .account-conversation-messages{max-height:55vh}
   .profile-save-row{grid-template-columns:1fr}.profile-save-row .btn{width:100%}
+  .job-image-preview{grid-template-columns:repeat(3,minmax(0,1fr))}.job-card-images{grid-template-columns:1fr 1fr}.job-card-images img,.job-card-image-more{height:105px;min-height:105px}.job-card-images img:first-child{grid-column:1/-1;height:180px}
+  .account-settings-card{grid-template-columns:1fr}.account-settings-card>a,.account-settings-card .account-actions{justify-self:stretch;width:100%}.account-settings-card .account-actions .btn{flex:1}
+  .job-agreement{grid-template-columns:1fr}.legal-nav{grid-template-columns:1fr}.badge-explainer{grid-template-columns:1fr}.legal-content h1{font-size:3rem}.footer-grid{grid-template-columns:1fr;gap:24px}
   .account-guest{padding:58px 0 80px}.account-guest-copy h1{font-size:3.2rem}.account-guest-preview{transform:none}
 }
 @media(max-width:520px){

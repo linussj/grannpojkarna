@@ -53,7 +53,23 @@ Kör migreringarna i nummerordning om de inte redan är installerade:
 - `supabase-migration-6.sql`: notiscenter för intresseanmälningar, valda utförare, jobbstatus, chatt och ersättning klar för utbetalning.
 - `supabase-migration-7.sql`: jobbmatchningar, skickade intresseanmälningar och separata notiser för slutfört jobb.
 - `supabase-migration-8.sql`: redigering av egna öppna jobb, publika utförarprofiler, privata direktmeddelanden och korrekt hantering av timpris.
+- `supabase-migration-9.sql`: frivilliga jobbmejl och en privat leveranslogg.
+- `supabase-migration-10.sql`: läskvitton i meddelanden och flera namngivna sparmål.
+- `supabase-migration-11.sql`: jobbilder, datumintervall, jobbevakningar, avbokningsflöde, anmälningar, integritetsbegäran och märket Beprövad profil.
+- `supabase-migration-12.sql`: låser privata serverfunktioner till inloggade användare och kompletterar databasindex.
 
 Migration 5 gör jobbflödet låst till **Öppet → Accepterat → Pågående → Klart**.
 Endast beställaren kan bekräfta ett pågående jobb som klart. Chatten kan bara
 läsas av jobbets beställare och valda utförare.
+
+## 7. Jobbmejl
+
+Edge Function-koden ligger i `supabase/functions/send-new-job-alerts/index.ts`.
+Funktionen behöver hemligheterna `RESEND_API_KEY` och `JOB_ALERT_FROM` i
+Supabase. Avsändaradressen måste tillhöra en domän som är verifierad hos Resend.
+Webbplatsen anropar funktionen efter att ett nytt jobb har publicerats. Ett
+tillfälligt mejlfel stoppar därför aldrig publiceringen av själva jobbet.
+
+Jobbevakningar kan skapas direkt från filtren på jobbsidan och pausas eller tas
+bort under **Mitt konto → Min profil**. Leveransloggen är inte åtkomlig från
+webbläsaren.

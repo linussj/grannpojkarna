@@ -213,8 +213,8 @@
           <a class="btn btn-light" href="jobb.html">Jag vill hitta jobb</a>
         </div>
         <div class="trust">
-          <span>✓ Verifierade profiler</span>
-          <span>✓ Omdömen</span>
+          <span>✓ Omdömen och jobbhistorik</span>
+          <span>✓ Personlig hjälp via telefon</span>
           <span>✓ Småjobb & större projekt</span>
         </div>
       </div>
@@ -402,9 +402,10 @@
     <div>
       <div class="logo" style="margin-bottom:10px"><span class="logo-mark">G</span><span>Grannpojkarna</span></div>
       <div class="tagline">Hjälpen finns runt hörnet.</div>
+      <div class="footer-pilot">Pilotprojekt under uppbyggnad · ännu utan organisationsnummer</div>
     </div>
-    <div>© 2026 Grannpojkarna · Pilot</div>
-    <div><a href="mailto:info@grannpojkarna.se">info@grannpojkarna.se</a></div>
+    <div class="footer-links"><strong>Tryggt och tydligt</strong><a href="villkor.html">Användarvillkor</a><a href="integritet.html">Integritet och kakor</a><a href="trygghet.html">Trygghet och anmälan</a></div>
+    <div><strong>Kontakt</strong><p><a href="mailto:info@grannpojkarna.se">info@grannpojkarna.se</a></p><span>© 2026 Grannpojkarna</span></div>
   </div>
 </footer>
 
@@ -428,8 +429,15 @@
         <input id="jobTitle" maxlength="100" placeholder="Exempel: Bärhjälp för en soffa" required />
       </div>
       <div class="field full">
-        <label id="mainLabel">Vad behöver du hjälp med?</label>
-        <textarea id="description" rows="4" placeholder="Exempel: Jag behöver hjälp att bära en soffa från våning 3..." required></textarea>
+        <label id="mainLabel" for="description">Vad behöver du hjälp med?</label>
+        <textarea id="description" rows="6" minlength="80" maxlength="3000" placeholder="Beskriv vad som ska göras, ungefärlig omfattning och sådant utföraren behöver känna till." required></textarea>
+        <span class="field-help" id="jobDescriptionHelp">Skriv minst 80 tecken. Ju tydligare du är, desto lättare blir det att få rätt hjälp.</span>
+      </div>
+      <div class="field full">
+        <label for="jobImages">Bilder <span class="optional-label">Frivilligt</span></label>
+        <input id="jobImages" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+        <span class="field-help">Upp till 5 bilder · JPG, PNG eller WebP · max 5 MB per bild</span>
+        <div class="job-image-preview" id="jobImagePreview"></div>
       </div>
       <div class="field">
         <label>Plats</label>
@@ -438,11 +446,16 @@
       <div class="field">
         <label>När?</label>
         <select id="jobWhen" required>
-          <option>Idag</option>
-          <option>Imorgon</option>
-          <option>Den här veckan</option>
-          <option>Välj datum senare</option>
+          <option value="today">Idag</option>
+          <option value="tomorrow">Imorgon</option>
+          <option value="week">Den här veckan</option>
+          <option value="custom">Välj datum eller intervall</option>
+          <option value="later">Kom överens senare</option>
         </select>
+      </div>
+      <div class="date-range-fields field full hidden" id="jobDateRange">
+        <div class="field"><label for="jobDateStart">Tidigast</label><input id="jobDateStart" type="date" /></div>
+        <div class="field"><label for="jobDateEnd">Senast <span class="optional-label">Frivilligt</span></label><input id="jobDateEnd" type="date" /></div>
       </div>
       <div class="field">
         <label id="budgetLabel" for="jobBudget">Budget</label>
@@ -471,6 +484,16 @@
           <option>Större projekt</option>
           <option>Övrigt</option>
         </select>
+      </div>
+      <details class="job-tips-card field full" open>
+        <summary>Bra att tänka på</summary>
+        <p id="categoryJobTip">Ta med omfattning, praktiska förutsättningar och vad som redan finns på plats.</p>
+        <ul><li>Dubbelkolla att plats, datum och budget stämmer.</li><li>Svara gärna i chatten om utföraren behöver fråga något.</li><li>Dela inte portkod eller andra känsliga uppgifter i den publika annonsen.</li></ul>
+      </details>
+      <div class="job-quality-card field full" aria-live="polite">
+        <div class="job-quality-head"><div><strong id="jobQualityLabel">Annonsens kvalitet: Kom igång</strong><span id="jobQualityPrivacy">Kontrolleras direkt i din webbläsare</span></div><strong id="jobQualityScore">0%</strong></div>
+        <div class="job-quality-track"><span id="jobQualityBar"></span></div>
+        <ul id="jobQualityTips"><li>Börja med en tydlig rubrik och beskrivning.</li></ul>
       </div>
       <div class="field full">
         <button class="btn btn-primary" style="width:100%" type="submit" id="submitBtn">Publicera jobb</button>
@@ -615,6 +638,10 @@
           </div>
         </div>
       </div>
+      <details class="onboarding-tips" open>
+        <summary>Bra att tänka på</summary>
+        <ul><li>Beskriv jobb tydligt och kontrollera att datum, plats och budget stämmer.</li><li>Fråga den andra personen i chatten om något är oklart.</li><li>Kom överens om pris och omfattning innan jobbet börjar.</li></ul>
+      </details>
       <button class="btn btn-primary" id="saveProfileBtn" onclick="saveProfile()">Skapa konto</button>
       <div class="notice hidden" id="profileNotice" role="status"></div>
     </div>

@@ -163,10 +163,12 @@
             </div>
             <div class="profile-save-row"><button class="btn btn-primary" id="saveOptionalProfileBtn" type="button" onclick="saveOptionalProfile()">Spara profil</button><div><div class="profile-progress"><span id="profileProgressBar"></span></div><div class="account-meta" id="profileProgressText"></div></div></div>
           </div>
+          <section class="account-settings-card" aria-labelledby="jobAlertsHeading"><div><h3 id="jobAlertsHeading">Jobbbevakningar</h3><p>Bevakningar du sparar på jobbsidan visas här.</p></div><div id="jobAlertsList"><span class="account-meta">Inga bevakningar ännu.</span></div><a class="btn btn-light btn-small" href="jobb.html#lediga-jobb">Skapa bevakning</a></section>
+          <section class="account-settings-card privacy-settings" aria-labelledby="privacyHeading"><div><h3 id="privacyHeading">Mina uppgifter</h3><p>Du kan begära en kopia av dina uppgifter eller be oss radera kontot.</p></div><div class="account-actions"><button class="btn btn-light btn-small" type="button" onclick="requestPrivacyAction('export')">Begär utdrag</button><button class="btn btn-danger btn-small" type="button" onclick="requestPrivacyAction('delete')">Begär radering</button></div></section>
         </section>
 
         <section class="account-panel hidden" id="accountEarningsPanel" role="tabpanel" aria-labelledby="accountTabEarnings">
-          <div class="account-panel-heading"><div><span class="eyebrow">Resultat</span><h2>Intjänat</h2><p>Följ dina slutförda jobb, betyg och ditt sparmål.</p></div></div>
+          <div class="account-panel-heading"><div><span class="eyebrow">Resultat</span><h2>Intjänat</h2><p>Följ dina slutförda jobb, betyg och ditt sparmål.</p></div><button class="btn btn-light btn-small" type="button" onclick="downloadEarningsCsv()">Ladda ner årsunderlag</button></div>
           <div class="earnings-grid"><div class="stat-card"><span>Totalt intjänat</span><strong id="totalEarnings">0 kr</strong></div><div class="stat-card"><span>Utförda jobb</span><strong id="completedJobsCount">0</strong></div><div class="stat-card"><span>Ditt betyg</span><strong id="averageRating">–</strong></div></div>
           <section class="savings-section" aria-labelledby="savingsGoalsHeading">
             <div class="savings-section-head">
@@ -195,7 +197,7 @@
   </section>
 </main>
 
-<footer><div class="wrap footer-grid"><div><div class="logo"><span class="logo-mark">G</span><span>Grannpojkarna</span></div><p class="tagline">Hjälpen finns runt hörnet.</p></div><div><strong>Behöver du hjälp?</strong><p><a href="mailto:info@grannpojkarna.se">info@grannpojkarna.se</a></p></div></div></footer>
+<footer><div class="wrap footer-grid"><div><div class="logo"><span class="logo-mark">G</span><span>Grannpojkarna</span></div><p class="tagline">Hjälpen finns runt hörnet.</p><div class="footer-pilot">Pilotprojekt under uppbyggnad · ännu utan organisationsnummer</div></div><div class="footer-links"><strong>Tryggt och tydligt</strong><a href="villkor.html">Användarvillkor</a><a href="integritet.html">Integritet och kakor</a><a href="trygghet.html">Trygghet och anmälan</a></div><div><strong>Kontakt</strong><p><a href="mailto:info@grannpojkarna.se">info@grannpojkarna.se</a></p><span>© 2026 Grannpojkarna</span></div></div></footer>
 
 <div class="modal" id="accountModal">
   <div class="dialog account-auth-dialog">
@@ -218,6 +220,7 @@
       <div class="field"><label for="profilePhone">Telefonnummer</label><input id="profilePhone" type="tel" autocomplete="tel" placeholder="070-123 45 67" /></div>
       <div class="field"><label for="profileAccountType">Kontotyp</label><select id="profileAccountType"><option value="private">Privatperson</option><option value="company">Företag</option></select></div>
       <div class="field"><label>Hur vill du använda Grannpojkarna?</label><div class="choice-grid"><div class="choice"><input type="radio" name="profileUse" id="profileUseCustomer" value="customer" checked /><label for="profileUseCustomer"><strong>Beställa</strong><span>Lägga upp jobb</span></label></div><div class="choice"><input type="radio" name="profileUse" id="profileUsePerformer" value="performer" /><label for="profileUsePerformer"><strong>Utföra</strong><span>Hitta och söka jobb</span></label></div><div class="choice"><input type="radio" name="profileUse" id="profileUseBoth" value="both" /><label for="profileUseBoth"><strong>Båda</strong><span>Beställa och utföra</span></label></div></div></div>
+      <details class="onboarding-tips" open><summary>Bra att tänka på</summary><ul><li>Beskriv jobb tydligt och kontrollera datum, plats och budget.</li><li>Fråga i chatten om något är oklart.</li><li>Kom överens om pris och omfattning innan jobbet börjar.</li></ul></details>
       <button class="btn btn-primary" id="saveProfileBtn" onclick="saveProfile()">Skapa konto</button><div class="notice hidden" id="profileNotice" role="status"></div>
     </div>
     <div id="performerStep" class="auth-stack hidden">

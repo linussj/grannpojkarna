@@ -178,6 +178,7 @@ footer{padding:44px 0 60px;color:var(--muted)}
 .field{display:grid;gap:7px;align-content:start;align-self:start;min-width:0}
 .field.full{grid-column:1/-1}
 .field-help{font-size:.78rem;color:var(--muted);line-height:1.4}
+.price-change-notice{color:#8a5a00;font-weight:750}
 .date-range-fields{grid-template-columns:1fr 1fr;gap:14px;padding:14px;border:1px solid var(--line);border-radius:16px;background:#f8faf8}
 .job-tips-card,.onboarding-tips{border:1px solid #cfe0d5;border-radius:16px;background:#f4faf6;padding:14px 16px;color:var(--ink)}
 .job-tips-card summary,.onboarding-tips summary{cursor:pointer;font-weight:900;color:var(--brand-dark)}

@@ -6,6 +6,7 @@
   <title>Hitta jobb nära dig – Grannpojkarna</title>
   <meta name="description" content="Se lediga småjobb och uppdrag nära dig. Filtrera på kategori, plats, tid och ersättning." />
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body data-page="jobs">
@@ -50,7 +51,7 @@
       <div>
         <span class="eyebrow">Jobb nära dig</span>
         <h1>Hitta något du kan hjälpa till med.</h1>
-        <p class="lead">Filtrera bland öppna jobb och anmäl intresse med din utförarprofil.</p>
+        <p class="lead">Ta ett jobb direkt till annonspriset eller lämna ett motbud till beställaren.</p>
       </div>
       <a class="btn btn-primary" href="index.html?newJob=1">Jag behöver hjälp</a>
     </div>
@@ -113,6 +114,16 @@
           <input id="filterLocation" placeholder="Exempel: Täby" />
         </div>
         <div class="field">
+          <label for="filterDistance">Avstånd</label>
+          <select id="filterDistance">
+            <option value="">Alla avstånd</option>
+            <option value="5">Inom 5 km</option>
+            <option value="10">Inom 10 km</option>
+            <option value="25">Inom 25 km</option>
+          </select>
+          <span class="field-help" id="distanceFilterStatus">Skriv ett område ovan för att söka på avstånd.</span>
+        </div>
+        <div class="field">
           <label for="filterTiming">När?</label>
           <select id="filterTiming">
             <option value="">När som helst</option>
@@ -142,13 +153,22 @@
           </div>
           <div style="display:flex;gap:10px;align-items:center">
             <button class="btn btn-light btn-small mobile-filter-btn" type="button" onclick="toggleJobFilters()">Filter</button>
+            <div class="job-view-toggle" role="group" aria-label="Visningsläge">
+              <button class="is-active" id="jobListViewBtn" type="button" aria-pressed="true" onclick="setJobView('list')">☰ Lista</button>
+              <button id="jobMapViewBtn" type="button" aria-pressed="false" onclick="setJobView('map')">⌖ Karta</button>
+            </div>
             <select id="filterSort" aria-label="Sortera jobb">
               <option value="newest">Nyast först</option>
+              <option value="match">Passar mig bäst</option>
               <option value="highest">Högst ersättning</option>
               <option value="lowest">Lägst ersättning</option>
             </select>
           </div>
         </div>
+        <section class="jobs-map-panel hidden" id="jobsMapPanel" aria-label="Karta över öppna jobb">
+          <div id="jobsMap"></div>
+          <div class="jobs-map-status" id="jobsMapStatus">Kartpositionerna är ungefärliga. Exakta adresser visas inte.</div>
+        </section>
         <div class="job-feed" id="publicJobs" aria-live="polite">
           <div class="empty-state"><p>Hämtar lediga jobb…</p></div>
         </div>
@@ -186,23 +206,35 @@
   <div class="dialog">
     <div class="dialog-top">
       <div>
-        <h3>Anmäl intresse</h3>
+        <h3>Ta jobbet</h3>
         <p class="auth-intro" id="applicationJobTitle"></p>
       </div>
       <button class="close" onclick="closeApplicationModal()" aria-label="Stäng">×</button>
     </div>
     <form class="form-grid" id="applicationForm" onsubmit="submitApplication(event)">
+      <fieldset class="application-offer-choice field full">
+        <legend>Pris</legend>
+        <label class="application-offer-option" for="applicationOfferAccept">
+          <input id="applicationOfferAccept" type="radio" name="applicationOfferType" value="accept" checked />
+          <span><strong id="applicationAcceptLabel">Ta jobbet till annonspriset</strong><small>Jobbet blir direkt ditt och chatten öppnas. Beställaren behöver inte godkänna.</small></span>
+        </label>
+        <label class="application-offer-option" for="applicationOfferCounter">
+          <input id="applicationOfferCounter" type="radio" name="applicationOfferType" value="counter" />
+          <span><strong>Lämna motbud</strong><small>Jobbet förblir öppet tills beställaren accepterar ditt pris.</small></span>
+        </label>
+      </fieldset>
       <div class="field full">
-        <label for="applicationMessage">Meddelande till beställaren</label>
-        <textarea id="applicationMessage" rows="5" maxlength="1000" placeholder="Berätta kort varför du passar för jobbet och när du kan hjälpa till" required></textarea>
+        <label for="applicationMessage" id="applicationMessageLabel">Meddelande till beställaren <span class="optional-label">Frivilligt</span></label>
+        <textarea id="applicationMessage" rows="4" maxlength="1000" placeholder="Skriv gärna när du kan börja eller om du har någon fråga"></textarea>
+        <span class="field-help" id="applicationMessageHelp">Du kan ta jobbet direkt utan att skriva ett meddelande.</span>
       </div>
-      <div class="field full">
-        <label for="applicationPrice" id="applicationPriceLabel">Ditt pris, valfritt</label>
+      <div class="field full hidden" id="applicationCounterofferField">
+        <label for="applicationPrice" id="applicationPriceLabel">Ditt motbud</label>
         <input id="applicationPrice" inputmode="numeric" placeholder="Exempel: 700 kr" />
-        <span class="field-help" id="applicationPriceHelp">Du kan acceptera budgeten genom att lämna fältet tomt.</span>
+        <span class="field-help" id="applicationPriceHelp">Beställaren kan välja att acceptera ditt prisförslag.</span>
       </div>
       <div class="field full">
-        <button class="btn btn-primary" style="width:100%" type="submit" id="applicationSubmitBtn">Skicka intresseanmälan</button>
+        <button class="btn btn-primary" style="width:100%" type="submit" id="applicationSubmitBtn">Ta jobbet</button>
         <div class="notice hidden" id="applicationNotice" role="status"></div>
       </div>
     </form>
@@ -479,6 +511,11 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+  import * as maplibregl from "https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs";
+  window.maplibregl = maplibregl;
+  window.dispatchEvent(new Event("maplibre-ready"));
+</script>
 <script src="config.js"></script>
 <script src="app.js"></script>
 </body>

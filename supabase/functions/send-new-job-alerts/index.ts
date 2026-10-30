@@ -52,13 +52,28 @@ function stockholmDateKey(offsetDays = 0) {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
+function distanceKm(fromLatitude: number, fromLongitude: number, toLatitude: number, toLongitude: number) {
+  const radians = (degrees: number) => degrees * Math.PI / 180;
+  const latitudeDelta = radians(toLatitude - fromLatitude);
+  const longitudeDelta = radians(toLongitude - fromLongitude);
+  const a = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(radians(fromLatitude)) * Math.cos(radians(toLatitude)) * Math.sin(longitudeDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function alertMatches(alert: Record<string, any>, job: Record<string, any>) {
   const haystack = `${job.title ?? ""} ${job.description ?? ""} ${job.category ?? ""}`.toLowerCase();
   const search = String(alert.search_term ?? "").trim().toLowerCase();
   const location = String(alert.location ?? "").trim().toLowerCase();
   if (search && !haystack.includes(search)) return false;
   if (alert.category && alert.category !== job.category) return false;
-  if (location && !String(job.location ?? "").toLowerCase().includes(location)) return false;
+  if (alert.radius_km) {
+    const rawCoordinates = [alert.origin_latitude, alert.origin_longitude, job.latitude, job.longitude];
+    if (rawCoordinates.some((value) => value === null || value === undefined || value === "")) return false;
+    const coordinates = rawCoordinates.map(Number);
+    if (!coordinates.every(Number.isFinite)) return false;
+    if (distanceKm(coordinates[0], coordinates[1], coordinates[2], coordinates[3]) > Number(alert.radius_km)) return false;
+  } else if (location && !String(job.location ?? "").toLowerCase().includes(location)) return false;
   if (alert.min_budget_sek && Number(job.budget_sek) < Number(alert.min_budget_sek)) return false;
   const start = String(job.date_start ?? "");
   const end = String(job.date_end ?? start);
@@ -118,28 +133,22 @@ const authenticatedHandler = withSupabase({ auth: "user" }, async (req, ctx) => 
   const callerId = String(ctx.userClaims?.sub ?? ctx.userClaims?.id ?? "");
   if (!Number.isSafeInteger(jobId) || jobId < 1 || !callerId) return jsonResponse({ error: "Invalid request" }, 400);
 
-  const { data: job, error: jobError } = await ctx.supabaseAdmin.from("jobs").select("id, user_id, title, description, location, timing, date_start, date_end, budget_sek, price_type, category, status, created_at").eq("id", jobId).maybeSingle();
+  const { data: job, error: jobError } = await ctx.supabaseAdmin.from("jobs").select("id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, budget_sek, price_type, category, status, created_at").eq("id", jobId).maybeSingle();
   if (jobError) return jsonResponse({ error: "Could not load job" }, 500);
   if (!job || job.user_id !== callerId) return jsonResponse({ error: "Forbidden" }, 403);
   const isFresh = Date.now() - new Date(job.created_at).getTime() <= 15 * 60 * 1000;
   if (job.status !== "open" || !isFresh) return jsonResponse({ error: "Job is not eligible for alerts" }, 409);
 
-  const [
-    { data: alerts, error: alertsError },
-    { data: legacyProfiles, error: profilesError },
-    { data: legacyMatches, error: matchesError },
-  ] = await Promise.all([
-    ctx.supabaseAdmin.from("job_alerts").select("user_id, search_term, category, location, timing, min_budget_sek").eq("email_enabled", true).neq("user_id", job.user_id).limit(500),
-    ctx.supabaseAdmin.from("profiles").select("id, email_job_alert_mode").eq("performer_enabled", true).neq("email_job_alert_mode", "off").neq("id", job.user_id).limit(500),
-    ctx.supabaseAdmin.from("notifications").select("user_id").eq("job_id", job.id).eq("type", "job_match"),
-  ]);
-  if (alertsError || profilesError || matchesError) return jsonResponse({ error: "Could not load recipients" }, 500);
+  const { data: alerts, error: alertsError } = await ctx.supabaseAdmin
+    .from("job_alerts")
+    .select("user_id, search_term, category, location, origin_latitude, origin_longitude, radius_km, timing, min_budget_sek")
+    .eq("email_enabled", true)
+    .neq("user_id", job.user_id)
+    .limit(500);
+  if (alertsError) return jsonResponse({ error: "Could not load recipients" }, 500);
 
+  // Endast uttryckligen sparade bevakningar skickar mejl.
   const matchingUserIds = new Set((alerts ?? []).filter((alert) => alertMatches(alert, job)).map((alert) => alert.user_id));
-  const legacyMatchingIds = new Set((legacyMatches ?? []).map((item) => item.user_id));
-  (legacyProfiles ?? []).forEach((profile) => {
-    if (profile.email_job_alert_mode === "all" || legacyMatchingIds.has(profile.id)) matchingUserIds.add(profile.id);
-  });
   const recipients = [...matchingUserIds].map((id) => ({ id }));
   EdgeRuntime.waitUntil(sendAlerts(ctx.supabaseAdmin, job, recipients));
   return jsonResponse({ queued: recipients.length }, 202);

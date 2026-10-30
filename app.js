@@ -1247,12 +1247,23 @@ function parseBudget(value) {
   return digits ? Number(digits) : null;
 }
 
-function updateJobPriceTypeFields() {
+function updateJobPriceTypeFields(options = {}) {
   const priceType = byId("jobPriceType")?.value || "fixed";
   const label = byId("budgetLabel");
   const input = byId("jobBudget");
   const help = byId("jobBudgetHelp");
+  const changeNotice = byId("jobPriceChangeNotice");
   if (!label || !input || !help) return;
+  if (options.userInitiated && input.value.trim()) {
+    input.value = "";
+    if (changeNotice) {
+      changeNotice.textContent = "Beloppet rensades eftersom du ändrade pristyp. Fyll i ett nytt belopp.";
+      changeNotice.classList.remove("hidden");
+    }
+  } else if (changeNotice) {
+    changeNotice.classList.add("hidden");
+    changeNotice.textContent = "";
+  }
   if (priceType === "hourly") {
     label.textContent = "Timpris";
     input.placeholder = "Exempel: 250 kr/tim";
@@ -1266,6 +1277,7 @@ function updateJobPriceTypeFields() {
     input.placeholder = "Exempel: 600 kr totalt";
     help.textContent = "Beloppet gäller för hela jobbet.";
   }
+  if (options.userInitiated) analyzeJobQuality();
 }
 
 const jobCategoryTips = {
@@ -3462,12 +3474,19 @@ function attachPageEvents() {
   window.addEventListener("pageshow", () => {
     if (authReady && !currentUser) restorePendingLogin();
   });
-  byId("jobPriceType")?.addEventListener("change", updateJobPriceTypeFields);
+  byId("jobPriceType")?.addEventListener("change", () => updateJobPriceTypeFields({ userInitiated: true }));
   byId("jobWhen")?.addEventListener("change", updateJobDateRangeVisibility);
   byId("jobCategory")?.addEventListener("change", updateJobCategoryTip);
   byId("jobImages")?.addEventListener("change", handleJobImages);
   ["jobTitle", "description", "jobPostalCode", "jobLocation", "jobBudget", "jobDateStart", "jobDateEnd"].forEach((id) => {
     byId(id)?.addEventListener("input", analyzeJobQuality);
+  });
+  byId("jobBudget")?.addEventListener("input", () => {
+    const notice = byId("jobPriceChangeNotice");
+    if (notice && byId("jobBudget")?.value.trim()) {
+      notice.classList.add("hidden");
+      notice.textContent = "";
+    }
   });
   byId("resolvePostalCodeBtn")?.addEventListener("click", () => resolveJobPostalCode());
   byId("jobPostalCode")?.addEventListener("input", (event) => {

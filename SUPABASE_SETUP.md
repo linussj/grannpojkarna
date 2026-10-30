@@ -57,10 +57,16 @@ Kör migreringarna i nummerordning om de inte redan är installerade:
 - `supabase-migration-10.sql`: läskvitton i meddelanden och flera namngivna sparmål.
 - `supabase-migration-11.sql`: jobbilder, datumintervall, jobbevakningar, avbokningsflöde, anmälningar, integritetsbegäran och märket Beprövad profil.
 - `supabase-migration-12.sql`: låser privata serverfunktioner till inloggade användare och kompletterar databasindex.
+- `supabase-migration-13.sql`: låter en utförare ta ett öppet jobb direkt till annonspriset, medan motbud fortfarande behöver godkännas av beställaren.
+- `supabase-migration-14.sql`: lägger till ungefärliga kartpositioner, avståndsfilter och avstånd i sparade jobbbevakningar.
 
 Migration 5 gör jobbflödet låst till **Öppet → Accepterat → Pågående → Klart**.
 Endast beställaren kan bekräfta ett pågående jobb som klart. Chatten kan bara
 läsas av jobbets beställare och valda utförare.
+
+Efter migration 13 blir ett jobb direkt accepterat när en utförare väljer **Ta
+jobbet**. Databasen låser jobbet atomärt så att endast den första utföraren kan
+få det. Ett motbud lämnar däremot jobbet öppet tills beställaren accepterar.
 
 ## 7. Jobbmejl
 
@@ -72,4 +78,5 @@ tillfälligt mejlfel stoppar därför aldrig publiceringen av själva jobbet.
 
 Jobbevakningar kan skapas direkt från filtren på jobbsidan och pausas eller tas
 bort under **Mitt konto → Min profil**. Leveransloggen är inte åtkomlig från
-webbläsaren.
+webbläsaren. Endast användare som själva har skapat en aktiv bevakning får
+jobbmejl; generella profil- eller matchningsmejl används inte.

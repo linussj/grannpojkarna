@@ -20,6 +20,7 @@ let pendingJob = false;
 let pendingJobAlert = false;
 let pendingEditJobId = null;
 let editingJobId = null;
+let editingJobCoordinates = null;
 let selectedJobImageFiles = [];
 let existingJobImagePaths = [];
 let removedJobImagePaths = [];
@@ -27,6 +28,16 @@ let pendingApplicationJobId = null;
 let selectedApplicationJobId = null;
 let roleHint = document.body.dataset.page === "jobs" ? "performer" : "customer";
 let publicJobs = [];
+let visiblePublicJobs = [];
+let nearbyPublicJobs = [];
+let jobFilterOrigin = null;
+let jobFilterOriginLabel = "";
+let jobsMap = null;
+let jobsMapMarkers = [];
+let jobsMapLoaded = false;
+let jobsMapPendingJobs = [];
+let jobsMapFallback = false;
+let activeJobView = "list";
 let ownJobs = [];
 let assignedJobs = [];
 let accountJobFilters = { performer: "active", owner: "active" };
@@ -1381,6 +1392,7 @@ function renderJobImages(paths = []) {
 
 function prepareNewJobForm() {
   editingJobId = null;
+  editingJobCoordinates = null;
   selectedJobImageFiles = [];
   existingJobImagePaths = [];
   removedJobImagePaths = [];
@@ -1408,7 +1420,7 @@ async function openEditJob(jobId) {
   if (!job) {
     const { data, error } = await supabaseClient
       .from("jobs")
-      .select("id, user_id, title, description, location, timing, date_start, date_end, image_paths, budget_sek, price_type, category, status")
+      .select("id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, image_paths, budget_sek, price_type, category, status")
       .eq("id", jobId)
       .eq("user_id", currentUser.id)
       .maybeSingle();
@@ -1420,6 +1432,10 @@ async function openEditJob(jobId) {
     return;
   }
   editingJobId = Number(job.id);
+  editingJobCoordinates = job.latitude !== null && job.latitude !== undefined && job.longitude !== null && job.longitude !== undefined
+    && Number.isFinite(Number(job.latitude)) && Number.isFinite(Number(job.longitude))
+    ? { latitude: Number(job.latitude), longitude: Number(job.longitude) }
+    : null;
   if (byId("jobTitle")) byId("jobTitle").value = job.title || "";
   if (byId("description")) byId("description").value = job.description || "";
   if (byId("jobLocation")) byId("jobLocation").value = job.location || "";
@@ -1471,6 +1487,10 @@ async function submitJob(event) {
     return;
   }
   const isEditing = Boolean(editingJobId);
+  setLoading("submitBtn", true, "Hittar området…", isEditing ? "Spara ändringar" : "Publicera jobb");
+  const coordinates = await geocodeArea(payload.location) || editingJobCoordinates;
+  payload.latitude = coordinates?.latitude ?? null;
+  payload.longitude = coordinates?.longitude ?? null;
   setLoading("submitBtn", true, isEditing ? "Sparar…" : "Publicerar…", isEditing ? "Spara ändringar" : "Publicera jobb");
   let uploadedPaths = [];
   try {
@@ -1493,7 +1513,9 @@ async function submitJob(event) {
         p_category: payload.category,
         p_date_start: payload.date_start,
         p_date_end: payload.date_end,
-        p_image_paths: imagePaths
+        p_image_paths: imagePaths,
+        p_latitude: payload.latitude,
+        p_longitude: payload.longitude
       })
     : await supabaseClient.from("jobs").insert({ ...payload, image_paths: imagePaths }).select("id").single();
   const { data, error } = result;
@@ -1506,6 +1528,7 @@ async function submitJob(event) {
   if (removedJobImagePaths.length) await supabaseClient.storage.from("job-images").remove(removedJobImagePaths);
   if (isEditing) {
     editingJobId = null;
+    editingJobCoordinates = null;
     setNotice("jobNotice", "Ändringarna är sparade.", "success");
     setTimeout(() => {
       closeModal();
@@ -1525,7 +1548,7 @@ async function loadMyJobs() {
   const container = byId("myJobs");
   if (!container || !supabaseClient || !currentUser) return;
   container.innerHTML = '<div class="account-meta">Hämtar dina jobb och uppdrag…</div>';
-  const jobFields = "id, user_id, title, description, location, timing, date_start, date_end, image_paths, budget_sek, price_type, category, status, created_at, updated_at, performer_id, agreed_price_sek, accepted_at, started_at, completed_at, cancelled_at, cancelled_by, cancellation_reason";
+  const jobFields = "id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, image_paths, budget_sek, price_type, category, status, created_at, updated_at, performer_id, agreed_price_sek, accepted_at, started_at, completed_at, cancelled_at, cancelled_by, cancellation_reason";
   const [ownedResult, assignedResult, availabilityResult] = await Promise.all([
     supabaseClient
       .from("jobs")
@@ -1618,7 +1641,7 @@ function renderAccountJob(job, relationship) {
   const canChat = ["accepted", "in_progress", "completed", "cancelled"].includes(job.status);
   const statusHelp = ({
     open: "Väntar på intresseanmälningar",
-    accepted: "Utföraren är vald – använd chatten för att planera jobbet",
+    accepted: "Jobbet är taget – använd chatten för att planera jobbet",
     in_progress: "Jobbet har startats och pågår",
     completed: "Beställaren har bekräftat att jobbet är klart",
     cancelled: "Jobbet är avslutat utan utförande"
@@ -1676,11 +1699,11 @@ function renderJobApplications(job) {
     : job.applications;
   return `
     <div class="job-applications">
-      <h5>${job.status !== "open" ? "Vald utförare" : `Intresseanmälningar (${job.applications.length})`}</h5>
+      <h5>${job.status !== "open" ? "Utförare" : `Intresseanmälningar (${job.applications.length})`}</h5>
       ${visibleApplications.map((application) => {
-        const proposedPrice = application.proposed_price_sek
-          ? `${formatCurrency(application.proposed_price_sek)}${job.price_type === "hourly" ? "/tim" : ""}`
-          : "Inget prisförslag";
+        const applicationPrice = Number(application.proposed_price_sek || job.budget_sek);
+        const isCounterOffer = Boolean(application.proposed_price_sek) && applicationPrice !== Number(job.budget_sek);
+        const proposedPrice = `${isCounterOffer ? "Motbud" : job.status === "open" ? "Accepterar priset" : "Tog jobbet för"}: ${formatCurrency(applicationPrice)}${job.price_type === "hourly" ? "/tim" : ""}`;
         const rating = Number(application.average_rating || 0);
         const ratingCount = Number(application.review_count || 0);
         return `
@@ -1696,7 +1719,7 @@ function renderJobApplications(job) {
               <p>${escapeHtml(application.message)}</p>
             </div>
             <div class="application-actions">
-              ${job.status === "open" && application.status === "pending" ? `<button class="btn btn-primary btn-small" type="button" onclick="acceptApplication(${application.application_id}, ${job.id})">Välj utförare</button>` : `<span class="status-pill">${application.status === "accepted" ? "Vald" : "Ej vald"}</span>`}
+              ${job.status === "open" && application.status === "pending" ? `<button class="btn btn-primary btn-small" type="button" onclick="acceptApplication(${application.application_id}, ${job.id})">Acceptera motbud</button>` : `<span class="status-pill">${application.status === "accepted" ? "Accepterad" : "Ej vald"}</span>`}
             </div>
           </div>`;
       }).join("")}
@@ -2368,7 +2391,7 @@ async function loadPublicJobs() {
   }
   const { data, error } = await supabaseClient
     .from("jobs")
-    .select("id, user_id, title, description, location, timing, date_start, date_end, image_paths, budget_sek, price_type, category, status, created_at")
+    .select("id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, image_paths, budget_sek, price_type, category, status, created_at")
     .eq("status", "open")
     .order("created_at", { ascending: false });
   if (error) {
@@ -2379,6 +2402,160 @@ async function loadPublicJobs() {
   applyJobFilters();
 }
 
+const geocodeStorageKey = "grannpojkarna.geocode-cache.v1";
+const knownAreaCoordinates = {
+  stockholm: [59.3293, 18.0686], solna: [59.3600, 18.0009], sundbyberg: [59.3613, 17.9711],
+  taby: [59.4439, 18.0687], danderyd: [59.4059, 18.0363], lidingo: [59.3664, 18.1334],
+  nacka: [59.3098, 18.1637], huddinge: [59.2370, 17.9819], botkyrka: [59.1988, 17.8332],
+  haninge: [59.1677, 18.1448], tyresö: [59.2442, 18.2294], tyreso: [59.2442, 18.2294],
+  sollentuna: [59.4280, 17.9509], jarfalla: [59.4232, 17.8303], upplandsvasby: [59.5184, 17.9113],
+  "upplands vasby": [59.5184, 17.9113], vallentuna: [59.5344, 18.0776], osteraker: [59.4795, 18.2997],
+  vaxholm: [59.4022, 18.3532], norrtalje: [59.7580, 18.7050], ekero: [59.2910, 17.8121],
+  salem: [59.2008, 17.7665], sodertalje: [59.1955, 17.6253], uppsala: [59.8586, 17.6389],
+  goteborg: [57.7089, 11.9746], malmo: [55.6050, 13.0038], vasteras: [59.6099, 16.5448],
+  orebro: [59.2753, 15.2134], linkoping: [58.4108, 15.6214], jonkoping: [57.7826, 14.1618]
+};
+
+function normalizeArea(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function approximateCoordinatesFor(value) {
+  const normalized = normalizeArea(value);
+  if (!normalized) return null;
+  const match = Object.entries(knownAreaCoordinates)
+    .filter(([area]) => normalized.includes(normalizeArea(area)))
+    .sort((a, b) => b[0].length - a[0].length)[0];
+  return match ? { latitude: match[1][0], longitude: match[1][1] } : null;
+}
+
+function readGeocodeCache() {
+  try { return JSON.parse(window.localStorage.getItem(geocodeStorageKey) || "{}"); }
+  catch { return {}; }
+}
+
+async function geocodeArea(value) {
+  const query = String(value || "").trim();
+  if (!query) return null;
+  const known = approximateCoordinatesFor(query);
+  if (known) return known;
+  const key = normalizeArea(query);
+  const cache = readGeocodeCache();
+  if (cache[key] && Number.isFinite(cache[key].latitude) && Number.isFinite(cache[key].longitude)) return cache[key];
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 4500);
+  try {
+    // En enda användarutlöst sökning, utan autocomplete. Resultatet sparas lokalt
+    // så att OpenStreetMaps publika geokodningstjänst inte anropas i onödan.
+    const url = new URL(appConfig.geocodingUrl || "https://nominatim.openstreetmap.org/search");
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("limit", "1");
+    url.searchParams.set("countrycodes", "se");
+    url.searchParams.set("q", `${query}, Sverige`);
+    const response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const latitude = Math.round(Number(data?.[0]?.lat) * 100) / 100;
+    const longitude = Math.round(Number(data?.[0]?.lon) * 100) / 100;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    const coordinates = { latitude, longitude };
+    const entries = Object.entries({ ...cache, [key]: coordinates }).slice(-50);
+    window.localStorage.setItem(geocodeStorageKey, JSON.stringify(Object.fromEntries(entries)));
+    return coordinates;
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function getJobCoordinates(job) {
+  if (job?.latitude === null || job?.latitude === undefined || job?.longitude === null || job?.longitude === undefined) {
+    return approximateCoordinatesFor(job?.location);
+  }
+  const latitude = Number(job?.latitude);
+  const longitude = Number(job?.longitude);
+  if (Number.isFinite(latitude) && Number.isFinite(longitude) && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+    return { latitude, longitude };
+  }
+  return approximateCoordinatesFor(job?.location);
+}
+
+function distanceKm(from, to) {
+  if (!from || !to) return null;
+  const radians = (degrees) => degrees * Math.PI / 180;
+  const earthRadiusKm = 6371;
+  const latitudeDelta = radians(to.latitude - from.latitude);
+  const longitudeDelta = radians(to.longitude - from.longitude);
+  const a = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(radians(from.latitude)) * Math.cos(radians(to.latitude)) * Math.sin(longitudeDelta / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function jobDistance(job) {
+  return jobFilterOrigin ? distanceKm(jobFilterOrigin, getJobCoordinates(job)) : null;
+}
+
+function jobMatchScore(job) {
+  if (!currentProfile?.performer_enabled) return null;
+  const haystack = normalizeArea(`${job.title || ""} ${job.description || ""} ${job.category || ""}`);
+  const skills = Array.isArray(currentProfile.skills) ? currentProfile.skills.map(normalizeArea).filter(Boolean) : [];
+  const skillScore = skills.some((skill) => haystack.includes(skill) || skill.includes(normalizeArea(job.category))) ? 45 : 12;
+  const profileArea = normalizeArea(currentProfile.service_area);
+  const jobArea = normalizeArea(job.location);
+  let areaScore = profileArea && jobArea && (profileArea.includes(jobArea) || jobArea.includes(profileArea)) ? 35 : 8;
+  if (areaScore < 35) {
+    const profileCoordinates = approximateCoordinatesFor(currentProfile.service_area);
+    const areaDistance = distanceKm(profileCoordinates, getJobCoordinates(job));
+    if (areaDistance !== null) areaScore = areaDistance <= 10 ? 32 : areaDistance <= 25 ? 22 : 8;
+  }
+  const availabilityScore = ["now", "today"].includes(currentProfile.availability_status) ? 20 : 10;
+  return Math.min(100, skillScore + areaScore + availabilityScore);
+}
+
+async function handleDistanceFilterChange() {
+  const radius = Number(byId("filterDistance")?.value || 0);
+  const location = byId("filterLocation")?.value.trim() || "";
+  if (!radius) {
+    jobFilterOrigin = null;
+    jobFilterOriginLabel = "";
+    if (byId("distanceFilterStatus")) byId("distanceFilterStatus").textContent = "Skriv ett område ovan för att söka på avstånd.";
+    applyJobFilters();
+    return;
+  }
+  if (!location) {
+    if (byId("filterDistance")) byId("filterDistance").value = "";
+    if (byId("distanceFilterStatus")) byId("distanceFilterStatus").textContent = "Skriv först en ort eller ett område.";
+    applyJobFilters();
+    return;
+  }
+  if (byId("distanceFilterStatus")) byId("distanceFilterStatus").textContent = "Hittar området…";
+  const coordinates = await geocodeArea(location);
+  if (!coordinates) {
+    jobFilterOrigin = null;
+    jobFilterOriginLabel = "";
+    if (byId("filterDistance")) byId("filterDistance").value = "";
+    if (byId("distanceFilterStatus")) byId("distanceFilterStatus").textContent = "Området kunde inte hittas. Prova en närliggande ort.";
+    applyJobFilters();
+    return;
+  }
+  jobFilterOrigin = coordinates;
+  jobFilterOriginLabel = normalizeArea(location);
+  if (byId("distanceFilterStatus")) byId("distanceFilterStatus").textContent = `Visar jobb inom ${radius} km från ${location}.`;
+  applyJobFilters();
+}
+
+function handleLocationFilterInput() {
+  const currentLabel = normalizeArea(byId("filterLocation")?.value);
+  if (jobFilterOrigin && currentLabel !== jobFilterOriginLabel) {
+    jobFilterOrigin = null;
+    jobFilterOriginLabel = "";
+    if (byId("filterDistance")) byId("filterDistance").value = "";
+    if (byId("distanceFilterStatus")) byId("distanceFilterStatus").textContent = "Välj avstånd igen för det nya området.";
+  }
+  applyJobFilters();
+}
+
 function applyJobFilters() {
   if (!byId("publicJobs")) return;
   const search = (byId("filterSearch")?.value || "").trim().toLowerCase();
@@ -2386,21 +2563,41 @@ function applyJobFilters() {
   const location = (byId("filterLocation")?.value || "").trim().toLowerCase();
   const timing = byId("filterTiming")?.value || "";
   const minBudget = Number(byId("filterMinBudget")?.value || 0);
+  const radius = Number(byId("filterDistance")?.value || 0);
   const sort = byId("filterSort")?.value || "newest";
-  const filtered = publicJobs.filter((job) => {
+  const candidates = publicJobs.filter((job) => {
     const searchable = `${job.title || ""} ${job.description || ""} ${job.category || ""}`.toLowerCase();
     return (!search || searchable.includes(search))
       && (!category || job.category === category)
-      && (!location || String(job.location || "").toLowerCase().includes(location))
       && (!timing || matchesJobTiming(job, timing))
       && (!minBudget || Number(job.budget_sek) >= minBudget);
   });
+  const filtered = candidates.filter((job) => {
+    if (radius && jobFilterOrigin) {
+      const distance = jobDistance(job);
+      return distance !== null && distance <= radius;
+    }
+    return !location || String(job.location || "").toLowerCase().includes(location);
+  });
   filtered.sort((a, b) => {
+    if (sort === "match") return Number(jobMatchScore(b) || 0) - Number(jobMatchScore(a) || 0);
     if (sort === "highest") return Number(b.budget_sek) - Number(a.budget_sek);
     if (sort === "lowest") return Number(a.budget_sek) - Number(b.budget_sek);
     return new Date(b.created_at) - new Date(a.created_at);
   });
-  renderPublicJobs(filtered);
+  const nearbyOrigin = jobFilterOrigin || approximateCoordinatesFor(location);
+  const nearby = !filtered.length && location && nearbyOrigin
+    ? candidates
+        .map((job) => ({ job, distance: distanceKm(nearbyOrigin, getJobCoordinates(job)) }))
+        .filter((item) => item.distance !== null && item.distance <= Math.max(50, radius * 3) && (!radius || item.distance > radius))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 3)
+        .map((item) => item.job)
+    : [];
+  visiblePublicJobs = filtered;
+  nearbyPublicJobs = nearby;
+  renderPublicJobs(filtered, nearby);
+  if (activeJobView === "map") renderJobsMap(filtered.length ? filtered : nearby);
 }
 
 function matchesJobTiming(job, filter) {
@@ -2417,11 +2614,51 @@ function matchesJobTiming(job, filter) {
   return true;
 }
 
-function renderPublicJobs(jobs) {
+function renderPublicJobCard(job) {
+  const isOwnJob = currentUser?.id === job.user_id;
+  const matchScore = jobMatchScore(job);
+  const distance = jobDistance(job);
+  return `
+    <article class="feed-card" id="publicJob-${job.id}">
+      <div class="feed-card-top">
+        <div>
+          <span class="eyebrow">${escapeHtml(job.category)}</span>
+          <h2>${escapeHtml(job.title || job.category)}</h2>
+          <div class="meta">
+            <span>📍 ${escapeHtml(job.location)}</span>
+            <span>🗓 ${escapeHtml(job.timing)}</span>
+            <span>${formatRelativeDate(job.created_at)}</span>
+          </div>
+        </div>
+        <div class="job-card-badges">
+          ${matchScore !== null ? `<span class="job-match-pill">Passar dig ${matchScore}%</span>` : ""}
+          ${distance !== null ? `<span class="job-distance-pill">${distance < 10 ? distance.toFixed(1).replace(".", ",") : Math.round(distance)} km</span>` : ""}
+          <div class="feed-price">${formatPrice(job)}</div>
+        </div>
+      </div>
+      ${renderJobImages(job.image_paths)}
+      <p>${escapeHtml(job.description)}</p>
+      <div class="feed-card-footer">
+        <div><span class="account-meta">${job.price_type === "hourly" ? "Ersättning per timme" : job.price_type === "quote" ? "Beställaren är öppen för prisförslag" : "Fast ersättning"}</span><br><button class="link-button danger-link report-link" type="button" onclick="openSafetyReport('job', ${job.id})">Anmäl annonsen</button></div>
+        <button class="btn ${isOwnJob ? "btn-light" : "btn-primary"} btn-small" ${isOwnJob ? "disabled" : ""} onclick="beginApplication(${job.id})">${isOwnJob ? "Ditt jobb" : "Ta jobbet"}</button>
+      </div>
+    </article>`;
+}
+
+function renderPublicJobs(jobs, nearby = []) {
   const container = byId("publicJobs");
   if (!container) return;
-  if (byId("jobsCount")) byId("jobsCount").textContent = `${jobs.length} ${jobs.length === 1 ? "öppet jobb" : "öppna jobb"}`;
+  if (byId("jobsCount")) byId("jobsCount").textContent = nearby.length && !jobs.length
+    ? `0 exakta träffar · ${nearby.length} i närheten`
+    : `${jobs.length} ${jobs.length === 1 ? "öppet jobb" : "öppna jobb"}`;
   if (!jobs.length) {
+    if (nearby.length) {
+      container.innerHTML = `<div class="nearby-results">
+        <div class="nearby-results-intro"><strong>Inga jobb exakt där du sökte</strong><span>Här är de närmaste jobben från närliggande områden.</span></div>
+        ${nearby.map(renderPublicJobCard).join("")}
+      </div>`;
+      return;
+    }
     container.innerHTML = `
       <div class="empty-state">
         <h2>Inga jobb matchar filtret</h2>
@@ -2430,30 +2667,137 @@ function renderPublicJobs(jobs) {
       </div>`;
     return;
   }
-  container.innerHTML = jobs.map((job) => {
-    const isOwnJob = currentUser?.id === job.user_id;
-    return `
-      <article class="feed-card">
-        <div class="feed-card-top">
-          <div>
-            <span class="eyebrow">${escapeHtml(job.category)}</span>
-            <h2>${escapeHtml(job.title || job.category)}</h2>
-            <div class="meta">
-              <span>📍 ${escapeHtml(job.location)}</span>
-              <span>🗓 ${escapeHtml(job.timing)}</span>
-              <span>${formatRelativeDate(job.created_at)}</span>
-            </div>
-          </div>
-          <div class="feed-price">${formatPrice(job)}</div>
-        </div>
-        ${renderJobImages(job.image_paths)}
-        <p>${escapeHtml(job.description)}</p>
-        <div class="feed-card-footer">
-          <div><span class="account-meta">${job.price_type === "hourly" ? "Ersättning per timme" : job.price_type === "quote" ? "Beställaren är öppen för prisförslag" : "Fast ersättning"}</span><br><button class="link-button danger-link report-link" type="button" onclick="openSafetyReport('job', ${job.id})">Anmäl annonsen</button></div>
-          <button class="btn ${isOwnJob ? "btn-light" : "btn-primary"} btn-small" ${isOwnJob ? "disabled" : ""} onclick="beginApplication(${job.id})">${isOwnJob ? "Ditt jobb" : "Anmäl intresse"}</button>
-        </div>
-      </article>`;
-  }).join("");
+  container.innerHTML = jobs.map(renderPublicJobCard).join("");
+}
+
+function initializeJobsMap() {
+  if (jobsMap || jobsMapFallback || !byId("jobsMap") || !window.maplibregl) return Boolean(jobsMap);
+  try {
+    jobsMap = new window.maplibregl.Map({
+      container: "jobsMap",
+      style: appConfig.mapStyleUrl || "https://tiles.openfreemap.org/styles/positron",
+      center: [18.0686, 59.3293],
+      zoom: 9,
+      maxZoom: 17,
+      attributionControl: false
+    });
+  } catch {
+    jobsMapFallback = true;
+    jobsMap = null;
+    return false;
+  }
+  jobsMap.addControl(new window.maplibregl.NavigationControl({ showCompass: false }), "top-left");
+  jobsMap.addControl(new window.maplibregl.AttributionControl({
+    compact: true,
+    customAttribution: appConfig.mapAttributionHtml || '<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+  }));
+  jobsMap.on("load", () => {
+    jobsMapLoaded = true;
+    renderJobsMap(jobsMapPendingJobs);
+  });
+  window.setTimeout(() => {
+    if (jobsMapLoaded || !jobsMap) return;
+    jobsMap.remove();
+    jobsMap = null;
+    jobsMapFallback = true;
+    if (activeJobView === "map") renderStaticJobsMap(jobsMapPendingJobs);
+  }, 8000);
+  return true;
+}
+
+function renderJobsMap(jobs) {
+  jobsMapPendingJobs = jobs;
+  if (jobsMapFallback) {
+    renderStaticJobsMap(jobs);
+    return;
+  }
+  if (!initializeJobsMap()) {
+    if (jobsMapFallback) renderStaticJobsMap(jobs);
+    else if (byId("jobsMapStatus")) byId("jobsMapStatus").textContent = "Kartan laddas… Jobben finns alltid kvar i listvyn.";
+    return;
+  }
+  if (!jobsMapLoaded) {
+    if (byId("jobsMapStatus")) byId("jobsMapStatus").textContent = "Kartan laddas…";
+    return;
+  }
+  jobsMapMarkers.forEach((marker) => marker.remove());
+  jobsMapMarkers = [];
+  const bounds = new window.maplibregl.LngLatBounds();
+  let markerCount = 0;
+  let missingPositions = 0;
+  jobs.forEach((job) => {
+    const coordinates = getJobCoordinates(job);
+    if (!coordinates) { missingPositions += 1; return; }
+    const element = document.createElement("button");
+    element.className = "job-map-marker";
+    element.type = "button";
+    element.setAttribute("aria-label", `${job.title || job.category}, ${job.location}`);
+    const popup = new window.maplibregl.Popup({ offset: 18, maxWidth: "260px" })
+      .setHTML(`<div class="job-map-popup"><strong>${escapeHtml(job.title || job.category)}</strong><span>${escapeHtml(job.location)} · ${escapeHtml(formatPrice(job))}</span><button type="button" onclick="focusJobInList(${Number(job.id)})">Visa jobbet</button></div>`);
+    const marker = new window.maplibregl.Marker({ element })
+      .setLngLat([coordinates.longitude, coordinates.latitude])
+      .setPopup(popup)
+      .addTo(jobsMap);
+    jobsMapMarkers.push(marker);
+    bounds.extend([coordinates.longitude, coordinates.latitude]);
+    markerCount += 1;
+  });
+  if (markerCount === 1) jobsMap.easeTo({ center: bounds.getCenter(), zoom: 12 });
+  else if (markerCount > 1) jobsMap.fitBounds(bounds, { padding: 60, maxZoom: 13 });
+  else jobsMap.easeTo({ center: [18.0686, 59.3293], zoom: 9 });
+  if (byId("jobsMapStatus")) byId("jobsMapStatus").textContent = markerCount
+    ? `${markerCount} jobb på kartan. Positionerna är ungefärliga.${missingPositions ? ` ${missingPositions} visas bara i listan.` : ""}`
+    : "Inga av träffarna har en kartposition ännu. Växla till listan för att se dem.";
+}
+
+function renderStaticJobsMap(jobs) {
+  const container = byId("jobsMap");
+  if (!container) return;
+  container.className = "static-jobs-map";
+  container.innerHTML = '<div class="static-map-north">N</div><div class="static-map-water" aria-hidden="true"></div>';
+  const locatedJobs = jobs.map((job) => ({ job, coordinates: getJobCoordinates(job) })).filter((item) => item.coordinates);
+  if (!locatedJobs.length) {
+    if (byId("jobsMapStatus")) byId("jobsMapStatus").textContent = "Inga av träffarna har en kartposition ännu. Växla till listan för att se dem.";
+    return;
+  }
+  const latitudes = locatedJobs.map((item) => item.coordinates.latitude);
+  const longitudes = locatedJobs.map((item) => item.coordinates.longitude);
+  const minLatitude = Math.min(...latitudes) - .02;
+  const maxLatitude = Math.max(...latitudes) + .02;
+  const minLongitude = Math.min(...longitudes) - .03;
+  const maxLongitude = Math.max(...longitudes) + .03;
+  locatedJobs.forEach(({ job, coordinates }, index) => {
+    const marker = document.createElement("button");
+    marker.className = "static-job-marker";
+    marker.type = "button";
+    marker.textContent = String(index + 1);
+    marker.dataset.label = String(job.location || job.title || "Jobb").slice(0, 22);
+    marker.setAttribute("aria-label", `${job.title || job.category}, ${job.location}`);
+    marker.style.left = `${12 + 76 * ((coordinates.longitude - minLongitude) / Math.max(.01, maxLongitude - minLongitude))}%`;
+    marker.style.top = `${12 + 76 * (1 - (coordinates.latitude - minLatitude) / Math.max(.01, maxLatitude - minLatitude))}%`;
+    marker.addEventListener("click", () => focusJobInList(job.id));
+    container.appendChild(marker);
+  });
+  if (byId("jobsMapStatus")) byId("jobsMapStatus").textContent = `${locatedJobs.length} jobb i en förenklad kartvy. Positionerna är ungefärliga.`;
+}
+
+function setJobView(view) {
+  activeJobView = view === "map" ? "map" : "list";
+  byId("publicJobs")?.classList.toggle("hidden", activeJobView === "map");
+  byId("jobsMapPanel")?.classList.toggle("hidden", activeJobView !== "map");
+  byId("jobListViewBtn")?.classList.toggle("is-active", activeJobView === "list");
+  byId("jobMapViewBtn")?.classList.toggle("is-active", activeJobView === "map");
+  byId("jobListViewBtn")?.setAttribute("aria-pressed", String(activeJobView === "list"));
+  byId("jobMapViewBtn")?.setAttribute("aria-pressed", String(activeJobView === "map"));
+  if (activeJobView === "map") {
+    renderJobsMap(visiblePublicJobs.length ? visiblePublicJobs : nearbyPublicJobs);
+    window.setTimeout(() => jobsMap?.resize?.(), 0);
+  }
+}
+
+function focusJobInList(jobId) {
+  setJobView("list");
+  window.setTimeout(() => byId(`publicJob-${jobId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
 }
 
 function renderJobsError(message) {
@@ -2462,9 +2806,12 @@ function renderJobsError(message) {
 }
 
 function resetJobFilters() {
-  ["filterSearch", "filterCategory", "filterLocation", "filterTiming", "filterMinBudget"].forEach((id) => {
+  ["filterSearch", "filterCategory", "filterLocation", "filterDistance", "filterTiming", "filterMinBudget"].forEach((id) => {
     if (byId(id)) byId(id).value = "";
   });
+  jobFilterOrigin = null;
+  jobFilterOriginLabel = "";
+  if (byId("distanceFilterStatus")) byId("distanceFilterStatus").textContent = "Skriv ett område ovan för att söka på avstånd.";
   if (byId("filterSort")) byId("filterSort").value = "newest";
   applyJobFilters();
 }
@@ -2474,7 +2821,10 @@ function toggleJobFilters() {
 }
 
 function jobAlertName(filters) {
-  const parts = [filters.category, filters.searchTerm, filters.location ? `i ${filters.location}` : ""].filter(Boolean);
+  const area = filters.location
+    ? filters.radius ? `inom ${filters.radius} km från ${filters.location}` : `i ${filters.location}`
+    : "";
+  const parts = [filters.category, filters.searchTerm, area, filters.minBudget ? `över ${formatCurrency(filters.minBudget)}` : ""].filter(Boolean);
   return (parts.join(" ") || "Alla nya jobb").slice(0, 100);
 }
 
@@ -2488,24 +2838,32 @@ async function saveCurrentJobAlert() {
     searchTerm: byId("filterSearch")?.value.trim() || null,
     category: byId("filterCategory")?.value || null,
     location: byId("filterLocation")?.value.trim() || null,
+    radius: Number(byId("filterDistance")?.value || 0) || null,
     timing: byId("filterTiming")?.value || null,
     minBudget: Number(byId("filterMinBudget")?.value || 0) || null
   };
   setLoading("saveJobAlertBtn", true, "Sparar…", "Skapa bevakning");
+  const alertOrigin = filters.radius && filters.location
+    ? jobFilterOrigin || await geocodeArea(filters.location)
+    : null;
+  if (filters.radius && !alertOrigin) {
+    setLoading("saveJobAlertBtn", false, "Sparar…", "Skapa bevakning");
+    setNotice("jobAlertNotice", "Området kunde inte hittas. Prova en närliggande ort eller välj Alla avstånd.", "error");
+    return;
+  }
   const { error } = await supabaseClient.from("job_alerts").insert({
     user_id: currentUser.id,
     name: jobAlertName(filters),
     search_term: filters.searchTerm,
     category: filters.category,
     location: filters.location,
+    origin_latitude: alertOrigin?.latitude ?? null,
+    origin_longitude: alertOrigin?.longitude ?? null,
+    radius_km: filters.radius,
     timing: filters.timing,
     min_budget_sek: filters.minBudget,
     email_enabled: true
   });
-  if (!error && currentProfile.email_job_alert_mode === "off") {
-    const { data } = await supabaseClient.from("profiles").update({ email_job_alert_mode: "matching" }).eq("id", currentUser.id).select(profileFields).single();
-    if (data) currentProfile = data;
-  }
   setLoading("saveJobAlertBtn", false, "Sparar…", "Skapa bevakning");
   if (error) {
     setNotice("jobAlertNotice", "Bevakningen kunde inte sparas. Försök igen.", "error");
@@ -2515,14 +2873,17 @@ async function saveCurrentJobAlert() {
 }
 
 function jobAlertSummary(alert) {
-  const parts = [alert.category, alert.location, alert.search_term ? `“${alert.search_term}”` : "", alert.min_budget_sek ? `minst ${formatCurrency(alert.min_budget_sek)}` : ""].filter(Boolean);
+  const area = alert.location
+    ? alert.radius_km ? `inom ${alert.radius_km} km från ${alert.location}` : alert.location
+    : "";
+  const parts = [alert.category, area, alert.search_term ? `“${alert.search_term}”` : "", alert.min_budget_sek ? `minst ${formatCurrency(alert.min_budget_sek)}` : ""].filter(Boolean);
   return parts.join(" · ") || "Alla nya jobb";
 }
 
 async function loadJobAlerts() {
   const container = byId("jobAlertsList");
   if (!container || !currentUser || !supabaseClient) return;
-  const { data, error } = await supabaseClient.from("job_alerts").select("id, name, search_term, category, location, timing, min_budget_sek, email_enabled, created_at").eq("user_id", currentUser.id).order("created_at", { ascending: false });
+  const { data, error } = await supabaseClient.from("job_alerts").select("id, name, search_term, category, location, origin_latitude, origin_longitude, radius_km, timing, min_budget_sek, email_enabled, created_at").eq("user_id", currentUser.id).order("created_at", { ascending: false });
   jobAlerts = error ? [] : data || [];
   container.className = "job-alerts-list";
   container.innerHTML = jobAlerts.length
@@ -2669,15 +3030,41 @@ function openApplicationModal(jobId) {
   const job = publicJobs.find((item) => Number(item.id) === Number(jobId));
   if (!job) return;
   selectedApplicationJobId = jobId;
+  byId("applicationForm")?.reset();
   if (byId("applicationJobTitle")) byId("applicationJobTitle").textContent = job.title || job.category;
-  if (byId("applicationPriceLabel")) byId("applicationPriceLabel").textContent = job.price_type === "hourly" ? "Ditt timpris, valfritt" : "Ditt pris, valfritt";
+  if (byId("applicationAcceptLabel")) byId("applicationAcceptLabel").textContent = `Ta jobbet · ${formatPrice(job)}`;
+  if (byId("applicationPriceLabel")) byId("applicationPriceLabel").textContent = job.price_type === "hourly" ? "Ditt motbud per timme" : "Ditt motbud";
   if (byId("applicationPrice")) byId("applicationPrice").placeholder = job.price_type === "hourly" ? "Exempel: 250 kr/tim" : "Exempel: 700 kr";
   if (byId("applicationPriceHelp")) byId("applicationPriceHelp").textContent = job.price_type === "hourly"
-    ? "Beloppet gäller per arbetad timme. Lämna tomt om du accepterar angivet timpris."
-    : "Du kan acceptera budgeten genom att lämna fältet tomt.";
+    ? "Motbudet gäller per arbetad timme."
+    : "Beställaren kan välja att acceptera ditt prisförslag.";
+  updateApplicationOfferChoice();
   setNotice("applicationNotice");
   byId("applicationModal")?.classList.add("show");
   setTimeout(() => byId("applicationMessage")?.focus(), 50);
+}
+
+function updateApplicationOfferChoice() {
+  const isCounterOffer = document.querySelector('input[name="applicationOfferType"]:checked')?.value === "counter";
+  byId("applicationCounterofferField")?.classList.toggle("hidden", !isCounterOffer);
+  if (byId("applicationPrice")) {
+    byId("applicationPrice").required = isCounterOffer;
+    if (!isCounterOffer) byId("applicationPrice").value = "";
+  }
+  const message = byId("applicationMessage");
+  if (message) {
+    message.required = isCounterOffer;
+    message.placeholder = isCounterOffer
+      ? "Förklara kort ditt motbud och när du kan hjälpa till"
+      : "Skriv gärna när du kan börja eller om du har någon fråga";
+  }
+  if (byId("applicationMessageLabel")) byId("applicationMessageLabel").innerHTML = isCounterOffer
+    ? "Meddelande till beställaren"
+    : 'Meddelande till beställaren <span class="optional-label">Frivilligt</span>';
+  if (byId("applicationMessageHelp")) byId("applicationMessageHelp").textContent = isCounterOffer
+    ? "Beskriv varför du föreslår ett annat pris."
+    : "Du kan ta jobbet direkt utan att skriva ett meddelande.";
+  if (byId("applicationSubmitBtn")) byId("applicationSubmitBtn").textContent = isCounterOffer ? "Skicka motbud" : "Ta jobbet";
 }
 
 function closeApplicationModal() {
@@ -2688,28 +3075,70 @@ function closeApplicationModal() {
 async function submitApplication(event) {
   event.preventDefault();
   if (!selectedApplicationJobId || !currentUser || !currentProfile?.performer_enabled) return;
+  const job = publicJobs.find((item) => Number(item.id) === Number(selectedApplicationJobId));
+  if (!job) return;
   const message = byId("applicationMessage").value.trim();
-  const proposedPrice = parseBudget(byId("applicationPrice").value);
-  if (message.length < 10) {
-    setNotice("applicationNotice", "Skriv ett lite längre meddelande till beställaren.", "error");
+  const isCounterOffer = document.querySelector('input[name="applicationOfferType"]:checked')?.value === "counter";
+  const proposedPrice = isCounterOffer ? parseBudget(byId("applicationPrice").value) : Number(job.budget_sek);
+  if (message && message.length < 10) {
+    setNotice("applicationNotice", "Skriv minst tio tecken i meddelandet eller lämna det tomt.", "error");
     return;
   }
-  setLoading("applicationSubmitBtn", true, "Skickar…", "Skicka intresseanmälan");
-  const { error } = await supabaseClient.from("job_applications").insert({
-    job_id: selectedApplicationJobId,
-    performer_id: currentUser.id,
-    message,
-    proposed_price_sek: proposedPrice
-  });
-  setLoading("applicationSubmitBtn", false, "Skickar…", "Skicka intresseanmälan");
+  if (isCounterOffer && message.length < 10) {
+    setNotice("applicationNotice", "Beskriv motbudet med minst tio tecken.", "error");
+    return;
+  }
+  if (isCounterOffer && !proposedPrice) {
+    setNotice("applicationNotice", "Ange ett giltigt motbud.", "error");
+    return;
+  }
+  if (isCounterOffer && proposedPrice === Number(job.budget_sek)) {
+    setNotice("applicationNotice", "Motbudet är samma som annonspriset. Välj Ta jobbet istället.", "error");
+    return;
+  }
+  const defaultButtonText = isCounterOffer ? "Skicka motbud" : "Ta jobbet";
+  setLoading("applicationSubmitBtn", true, isCounterOffer ? "Skickar motbud…" : "Tar jobbet…", defaultButtonText);
+  const { error } = isCounterOffer
+    ? await supabaseClient.from("job_applications").insert({
+      job_id: selectedApplicationJobId,
+      performer_id: currentUser.id,
+      message,
+      proposed_price_sek: proposedPrice
+    })
+    : await supabaseClient.rpc("claim_open_job", {
+      p_job_id: selectedApplicationJobId,
+      p_message: message
+    });
+  setLoading("applicationSubmitBtn", false, isCounterOffer ? "Skickar motbud…" : "Tar jobbet…", defaultButtonText);
   if (error) {
     const duplicate = error.code === "23505";
-    setNotice("applicationNotice", duplicate ? "Du har redan anmält intresse för det här jobbet." : "Intresseanmälan kunde inte skickas.", "error");
+    const unavailable = !isCounterOffer && /JOB_UNAVAILABLE/i.test(error.message || "");
+    if (unavailable) {
+      await loadPublicJobs();
+      setNotice("applicationNotice", "Någon annan hann ta jobbet, eller så är det inte längre öppet.", "error");
+      return;
+    }
+    setNotice("applicationNotice", duplicate ? "Du har redan lämnat ett motbud på det här jobbet." : isCounterOffer ? "Motbudet kunde inte skickas." : "Jobbet kunde inte tas. Försök igen.", "error");
+    return;
+  }
+  if (!isCounterOffer) {
+    publicJobs = publicJobs.filter((item) => Number(item.id) !== Number(selectedApplicationJobId));
+    applyJobFilters();
+    const submitButton = byId("applicationSubmitBtn");
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = "Jobbet är ditt";
+    }
+    setNotice("applicationNotice", "Jobbet är ditt! Chatten finns nu under Mina jobb.", "success");
+    await loadNotifications();
+    window.setTimeout(() => { window.location.href = "konto.html#jobs"; }, 1100);
     return;
   }
   byId("applicationForm").reset();
-  setNotice("applicationNotice", "Din intresseanmälan är skickad!", "success");
+  updateApplicationOfferChoice();
+  setNotice("applicationNotice", "Ditt motbud är skickat. Jobbet är öppet tills beställaren accepterar.", "success");
   await loadNotifications();
+  window.setTimeout(closeApplicationModal, 1400);
 }
 
 function formatPrice(job) {
@@ -2833,10 +3262,14 @@ async function initializeAuth() {
 }
 
 function attachPageEvents() {
+  window.addEventListener("maplibre-ready", () => {
+    if (activeJobView === "map") renderJobsMap(visiblePublicJobs.length ? visiblePublicJobs : nearbyPublicJobs);
+  });
   byId("modal")?.addEventListener("click", function (event) { if (event.target === this) closeModal(); });
   byId("accountModal")?.addEventListener("click", function (event) { if (event.target === this) closeAccountModal(); });
   byId("callbackModal")?.addEventListener("click", function (event) { if (event.target === this) closeCallbackModal(); });
   byId("applicationModal")?.addEventListener("click", function (event) { if (event.target === this) closeApplicationModal(); });
+  document.querySelectorAll('input[name="applicationOfferType"]').forEach((input) => input.addEventListener("change", updateApplicationOfferChoice));
   byId("jobChatModal")?.addEventListener("click", function (event) { if (event.target === this) closeJobChat(); });
   byId("performerProfileModal")?.addEventListener("click", function (event) { if (event.target === this) closePerformerProfile(); });
   document.addEventListener("click", (event) => {
@@ -2884,12 +3317,14 @@ function attachPageEvents() {
     const preview = byId("profileAvatarPreview");
     if (preview) preview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="" />`;
   });
-  ["filterSearch", "filterCategory", "filterLocation", "filterTiming", "filterMinBudget", "filterSort"].forEach((id) => {
+  ["filterSearch", "filterCategory", "filterTiming", "filterMinBudget", "filterSort"].forEach((id) => {
     const element = byId(id);
     if (!element) return;
-    const eventName = ["filterSearch", "filterLocation", "filterMinBudget"].includes(id) ? "input" : "change";
+    const eventName = ["filterSearch", "filterMinBudget"].includes(id) ? "input" : "change";
     element.addEventListener(eventName, applyJobFilters);
   });
+  byId("filterLocation")?.addEventListener("input", handleLocationFilterInput);
+  byId("filterDistance")?.addEventListener("change", handleDistanceFilterChange);
   ["performerSearchFilter", "performerAreaFilter"].forEach((id) => {
     byId(id)?.addEventListener("input", applyPerformerFilters);
   });

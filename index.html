@@ -486,17 +486,19 @@
         <div class="field"><label for="jobDateEnd">Senast <span class="optional-label">Frivilligt</span></label><input id="jobDateEnd" type="date" /></div>
       </div>
       <div class="field">
-        <label id="budgetLabel" for="jobBudget">Budget</label>
-        <input id="jobBudget" inputmode="numeric" placeholder="600 kr" required />
-        <span class="field-help" id="jobBudgetHelp">Ange den totala ersättningen för hela jobbet.</span>
-      </div>
-      <div class="field">
-        <label for="jobPriceType">Ersättning</label>
+        <label for="jobPriceType">Pristyp</label>
         <select id="jobPriceType" required>
           <option value="fixed">Fast pris</option>
           <option value="hourly">Timpris</option>
           <option value="quote">Öppen för förslag</option>
         </select>
+        <span class="field-help">Välj först hur ersättningen ska räknas.</span>
+        <span class="field-help price-change-notice hidden" id="jobPriceChangeNotice" role="status"></span>
+      </div>
+      <div class="field">
+        <label id="budgetLabel" for="jobBudget">Fast totalpris</label>
+        <input id="jobBudget" inputmode="numeric" placeholder="Exempel: 600 kr totalt" required />
+        <span class="field-help" id="jobBudgetHelp">Beloppet gäller för hela jobbet.</span>
       </div>
       <div class="field">
         <label>Kategori</label>

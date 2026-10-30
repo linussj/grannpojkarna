@@ -162,6 +162,7 @@
       .field.full{grid-column:auto}
     }
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -439,10 +440,36 @@
         <span class="field-help">Upp till 5 bilder · JPG, PNG eller WebP · max 5 MB per bild</span>
         <div class="job-image-preview" id="jobImagePreview"></div>
       </div>
-      <div class="field">
-        <label>Plats</label>
-        <input id="jobLocation" placeholder="Upplands Väsby" required />
-        <span class="field-help">Ange ort eller område, inte fullständig adress. Kartpositionen visas ungefärligt.</span>
+      <div class="job-location-card field full">
+        <div class="job-location-head">
+          <span class="job-location-icon" aria-hidden="true">⌖</span>
+          <div>
+            <strong>Var ska jobbet utföras?</strong>
+            <p>Postnumret används för att hitta rätt område och visa jobbet ungefärligt på kartan.</p>
+          </div>
+        </div>
+        <div class="job-location-fields">
+          <div class="field">
+            <label for="jobPostalCode">Postnummer</label>
+            <input id="jobPostalCode" inputmode="numeric" autocomplete="postal-code" maxlength="6" placeholder="Exempel: 194 35" required />
+          </div>
+          <div class="field">
+            <label for="jobLocation">Ort eller område</label>
+            <input id="jobLocation" autocomplete="address-level2" maxlength="120" placeholder="Fylls i från postnumret" required />
+          </div>
+        </div>
+        <div class="job-location-actions">
+          <button class="btn btn-light btn-small" id="resolvePostalCodeBtn" type="button">Hämta område</button>
+          <span class="field-help" id="jobLocationStatus" role="status">Skriv ett postnummer och tryck på Hämta område.</span>
+        </div>
+        <div class="job-location-map-wrap hidden" id="jobLocationMapWrap">
+          <div class="job-location-map" id="jobLocationMap" role="img" aria-label="Ungefärlig kartposition för jobbet"></div>
+          <div class="job-location-map-copy">
+            <strong id="jobLocationMapLabel">Ungefärlig plats</strong>
+            <span>Markeringen visar området, inte en exakt bostad.</span>
+          </div>
+        </div>
+        <p class="job-location-privacy"><span aria-hidden="true">🔒</span> Fullständig adress och eventuell portkod delar du först i den privata chatten när jobbet är taget.</p>
       </div>
       <div class="field">
         <label>När?</label>
@@ -833,6 +860,11 @@
   </div>
 </div>
 
+<script type="module">
+  import * as maplibregl from "https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs";
+  window.maplibregl = maplibregl;
+  window.dispatchEvent(new Event("maplibre-ready"));
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>

@@ -21,6 +21,10 @@ let pendingJobAlert = false;
 let pendingEditJobId = null;
 let editingJobId = null;
 let editingJobCoordinates = null;
+let jobResolvedCoordinates = null;
+let jobLocationMap = null;
+let jobLocationMapMarker = null;
+let lastResolvedPostalCode = "";
 let selectedJobImageFiles = [];
 let existingJobImagePaths = [];
 let removedJobImagePaths = [];
@@ -1309,6 +1313,7 @@ function timingPayload() {
 function analyzeJobQuality() {
   const title = byId("jobTitle")?.value.trim() || "";
   const description = byId("description")?.value.trim() || "";
+  const postalCode = normalizeSwedishPostalCode(byId("jobPostalCode")?.value || "");
   const location = byId("jobLocation")?.value.trim() || "";
   const budget = parseBudget(byId("jobBudget")?.value || "");
   const timing = timingPayload();
@@ -1318,7 +1323,8 @@ function analyzeJobQuality() {
     { ok: title.length >= 10, weight: 15, tip: "Gör rubriken lite tydligare, gärna minst 10 tecken." },
     { ok: description.length >= 80, weight: 30, tip: `Beskriv jobbet noggrannare – ${Math.max(0, 80 - description.length)} tecken återstår.` },
     { ok: detailSignal || description.length >= 160, weight: 15, tip: "Lägg till omfattning, mått, antal eller praktiska förutsättningar." },
-    { ok: location.length >= 2, weight: 15, tip: "Ange ort eller område, men vänta med exakt portkod." },
+    { ok: postalCode.length === 6, weight: 8, tip: "Ange ett femsiffrigt postnummer." },
+    { ok: location.length >= 2, weight: 7, tip: "Kontrollera att ort eller område är ifyllt." },
     { ok: validDateRange, weight: 10, tip: "Kontrollera att datumintervallet börjar och slutar i rätt ordning." },
     { ok: Boolean(budget), weight: 10, tip: "Ange budget eller ungefärlig ersättning." },
     { ok: existingJobImagePaths.length + selectedJobImageFiles.length > 0, weight: 5, tip: "En bild är frivillig men gör jobbet lättare att bedöma." }
@@ -1393,10 +1399,17 @@ function renderJobImages(paths = []) {
 function prepareNewJobForm() {
   editingJobId = null;
   editingJobCoordinates = null;
+  jobResolvedCoordinates = null;
+  lastResolvedPostalCode = "";
   selectedJobImageFiles = [];
   existingJobImagePaths = [];
   removedJobImagePaths = [];
   byId("jobForm")?.reset();
+  byId("jobLocationMapWrap")?.classList.add("hidden");
+  if (byId("jobLocationStatus")) {
+    byId("jobLocationStatus").textContent = "Skriv ett postnummer och tryck på Hämta område.";
+    byId("jobLocationStatus").className = "field-help";
+  }
   if (byId("modalTitle")) byId("modalTitle").textContent = "Lägg upp ett jobb";
   if (byId("submitBtn")) byId("submitBtn").textContent = "Publicera jobb";
   updateJobPriceTypeFields();
@@ -1438,7 +1451,11 @@ async function openEditJob(jobId) {
     : null;
   if (byId("jobTitle")) byId("jobTitle").value = job.title || "";
   if (byId("description")) byId("description").value = job.description || "";
-  if (byId("jobLocation")) byId("jobLocation").value = job.location || "";
+  const existingLocation = splitPublicJobLocation(job.location || "");
+  if (byId("jobPostalCode")) byId("jobPostalCode").value = existingLocation.postalCode;
+  if (byId("jobLocation")) byId("jobLocation").value = existingLocation.area;
+  jobResolvedCoordinates = editingJobCoordinates;
+  lastResolvedPostalCode = existingLocation.postalCode;
   if (byId("jobWhen")) byId("jobWhen").value = job.date_start ? "custom" : ({ Idag: "today", Imorgon: "tomorrow", "Den här veckan": "week" })[job.timing] || "later";
   if (byId("jobDateStart")) byId("jobDateStart").value = job.date_start || "";
   if (byId("jobDateEnd")) byId("jobDateEnd").value = job.date_end || "";
@@ -1457,6 +1474,11 @@ async function openEditJob(jobId) {
   setNotice("jobNotice", "Du kan redigera jobbet så länge ingen utförare har valts.");
   closeAccountModal();
   byId("modal")?.classList.add("show");
+  if (editingJobCoordinates) {
+    window.setTimeout(() => renderJobLocationPreview(editingJobCoordinates, existingLocation.area || "Ungefärlig plats", existingLocation.postalCode), 0);
+  } else {
+    byId("jobLocationMapWrap")?.classList.add("hidden");
+  }
   renderJobModalPerformers();
 }
 
@@ -1470,11 +1492,13 @@ async function submitJob(event) {
   }
   const schedule = timingPayload();
   const quality = analyzeJobQuality();
+  const postalCode = normalizeSwedishPostalCode(byId("jobPostalCode")?.value || "");
+  const area = byId("jobLocation").value.trim();
   const payload = {
     user_id: currentUser.id,
     title: byId("jobTitle").value.trim(),
     description: byId("description").value.trim(),
-    location: byId("jobLocation").value.trim(),
+    location: composePublicJobLocation(postalCode, area),
     timing: schedule.timing,
     date_start: schedule.dateStart,
     date_end: schedule.dateEnd,
@@ -1482,13 +1506,13 @@ async function submitJob(event) {
     price_type: byId("jobPriceType").value,
     category: byId("jobCategory").value
   };
-  if (payload.title.length < 4 || !quality.descriptionReady || !quality.dateReady || !payload.location || !payload.budget_sek) {
-    setNotice("jobNotice", "Kontrollera rubrik, en noggrann beskrivning, plats, datum och budget.", "error");
+  if (payload.title.length < 4 || !quality.descriptionReady || !quality.dateReady || postalCode.length !== 6 || !area || !payload.budget_sek) {
+    setNotice("jobNotice", "Kontrollera rubrik, en noggrann beskrivning, postnummer, område, datum och budget.", "error");
     return;
   }
   const isEditing = Boolean(editingJobId);
   setLoading("submitBtn", true, "Hittar området…", isEditing ? "Spara ändringar" : "Publicera jobb");
-  const coordinates = await geocodeArea(payload.location) || editingJobCoordinates;
+  const coordinates = jobResolvedCoordinates || await geocodeArea(payload.location) || editingJobCoordinates;
   payload.latitude = coordinates?.latitude ?? null;
   payload.longitude = coordinates?.longitude ?? null;
   setLoading("submitBtn", true, isEditing ? "Sparar…" : "Publicerar…", isEditing ? "Spara ändringar" : "Publicera jobb");
@@ -2403,6 +2427,7 @@ async function loadPublicJobs() {
 }
 
 const geocodeStorageKey = "grannpojkarna.geocode-cache.v1";
+const postalCodeStorageKey = "grannpojkarna.postnummer-cache.v4";
 const knownAreaCoordinates = {
   stockholm: [59.3293, 18.0686], solna: [59.3600, 18.0009], sundbyberg: [59.3613, 17.9711],
   taby: [59.4439, 18.0687], danderyd: [59.4059, 18.0363], lidingo: [59.3664, 18.1334],
@@ -2432,6 +2457,147 @@ function approximateCoordinatesFor(value) {
 function readGeocodeCache() {
   try { return JSON.parse(window.localStorage.getItem(geocodeStorageKey) || "{}"); }
   catch { return {}; }
+}
+
+function normalizeSwedishPostalCode(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 5);
+  return digits.length === 5 ? `${digits.slice(0, 3)} ${digits.slice(3)}` : digits;
+}
+
+function splitPublicJobLocation(value) {
+  const location = String(value || "").trim();
+  const match = location.match(/(?:^|\s)(\d{3})\s?(\d{2})(?:\s|$)/);
+  if (!match) return { postalCode: "", area: location };
+  const postalCode = `${match[1]} ${match[2]}`;
+  const area = location.replace(match[0], " ").replace(/\s+/g, " ").trim();
+  return { postalCode, area };
+}
+
+function composePublicJobLocation(postalCode, area) {
+  const cleanPostalCode = normalizeSwedishPostalCode(postalCode);
+  const cleanArea = String(area || "").replace(/^\d{3}\s?\d{2}\s*/, "").trim();
+  return [cleanPostalCode, cleanArea].filter(Boolean).join(" ");
+}
+
+function readPostalCodeCache() {
+  try { return JSON.parse(window.localStorage.getItem(postalCodeStorageKey) || "{}"); }
+  catch { return {}; }
+}
+
+function setJobLocationStatus(message, state = "") {
+  const status = byId("jobLocationStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.className = `field-help${state ? ` is-${state}` : ""}`;
+}
+
+async function lookupSwedishPostalCode(value) {
+  const postalCode = normalizeSwedishPostalCode(value);
+  if (postalCode.length !== 6) return null;
+  const key = postalCode.replace(/\s/g, "");
+  const cache = readPostalCodeCache();
+  const cached = cache[key];
+  if (cached && cached.area && Number.isFinite(cached.latitude) && Number.isFinite(cached.longitude)) return cached;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 4500);
+  try {
+    const baseUrl = String(appConfig.postalCodeLookupUrl || "https://api.zippopotam.us").replace(/\/$/, "");
+    const response = await fetch(`${baseUrl}/SE/${key}`, { headers: { Accept: "application/json" }, signal: controller.signal });
+    if (!response.ok) return null;
+    const result = await response.json();
+    const place = result?.places?.[0];
+    const latitude = Math.round(Number(place?.latitude) * 100) / 100;
+    const longitude = Math.round(Number(place?.longitude) * 100) / 100;
+    const area = place?.["place name"] || "";
+    if (!area || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    const resolved = { postalCode, area: String(area), latitude, longitude };
+    const entries = Object.entries({ ...cache, [key]: resolved }).slice(-50);
+    window.localStorage.setItem(postalCodeStorageKey, JSON.stringify(Object.fromEntries(entries)));
+    return resolved;
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function renderJobLocationMapFallback(container) {
+  container.classList.add("is-fallback");
+  container.innerHTML = '<span class="job-location-map-marker" aria-hidden="true"></span>';
+}
+
+function renderJobLocationPreview(coordinates, area, postalCode = "") {
+  if (!coordinates || !byId("jobLocationMap") || !byId("jobLocationMapWrap")) return;
+  jobResolvedCoordinates = coordinates;
+  byId("jobLocationMapWrap").classList.remove("hidden");
+  if (byId("jobLocationMapLabel")) byId("jobLocationMapLabel").textContent = [postalCode, area].filter(Boolean).join(" ") || "Ungefärlig plats";
+  const container = byId("jobLocationMap");
+  container.setAttribute("aria-label", `Ungefärlig kartposition för ${area || "jobbet"}`);
+  if (!window.maplibregl?.Map || !window.maplibregl?.Marker) {
+    renderJobLocationMapFallback(container);
+    return;
+  }
+  try {
+    const center = [Number(coordinates.longitude), Number(coordinates.latitude)];
+    if (!jobLocationMap) {
+      container.classList.remove("is-fallback");
+      container.innerHTML = "";
+      jobLocationMap = new window.maplibregl.Map({
+        container,
+        style: appConfig.mapStyleUrl || "https://tiles.openfreemap.org/styles/positron",
+        center,
+        zoom: 10.5,
+        attributionControl: true,
+        interactive: false
+      });
+      const markerElement = document.createElement("span");
+      markerElement.className = "job-location-map-marker";
+      jobLocationMapMarker = new window.maplibregl.Marker({ element: markerElement }).setLngLat(center).addTo(jobLocationMap);
+    } else {
+      jobLocationMap.jumpTo({ center, zoom: 10.5 });
+      jobLocationMapMarker?.setLngLat(center);
+      jobLocationMap.resize();
+    }
+  } catch {
+    jobLocationMap = null;
+    jobLocationMapMarker = null;
+    renderJobLocationMapFallback(container);
+  }
+}
+
+async function resolveJobPostalCode(options = {}) {
+  const input = byId("jobPostalCode");
+  const button = byId("resolvePostalCodeBtn");
+  if (!input) return null;
+  const postalCode = normalizeSwedishPostalCode(input.value);
+  input.value = postalCode;
+  if (postalCode.length !== 6) {
+    if (!options.silent) setJobLocationStatus("Skriv ett giltigt femsiffrigt postnummer, exempelvis 194 35.", "error");
+    return null;
+  }
+  if (postalCode === lastResolvedPostalCode && jobResolvedCoordinates) return jobResolvedCoordinates;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Hämtar…";
+  }
+  setJobLocationStatus("Hämtar ungefärligt område…");
+  const resolved = await lookupSwedishPostalCode(postalCode);
+  if (button) {
+    button.disabled = false;
+    button.textContent = "Hämta område";
+  }
+  if (!resolved) {
+    jobResolvedCoordinates = null;
+    setJobLocationStatus("Området kunde inte hämtas automatiskt. Fyll i orten manuellt eller försök igen.", "error");
+    return null;
+  }
+  lastResolvedPostalCode = postalCode;
+  jobResolvedCoordinates = { latitude: resolved.latitude, longitude: resolved.longitude };
+  if (byId("jobLocation")) byId("jobLocation").value = resolved.area;
+  setJobLocationStatus(`Område hittat: ${resolved.area}. Du kan rätta orten om det behövs.`, "success");
+  renderJobLocationPreview(jobResolvedCoordinates, resolved.area, postalCode);
+  analyzeJobQuality();
+  return jobResolvedCoordinates;
 }
 
 async function geocodeArea(value) {
@@ -3264,6 +3430,7 @@ async function initializeAuth() {
 function attachPageEvents() {
   window.addEventListener("maplibre-ready", () => {
     if (activeJobView === "map") renderJobsMap(visiblePublicJobs.length ? visiblePublicJobs : nearbyPublicJobs);
+    if (jobResolvedCoordinates) renderJobLocationPreview(jobResolvedCoordinates, byId("jobLocation")?.value.trim() || "Ungefärlig plats", normalizeSwedishPostalCode(byId("jobPostalCode")?.value || ""));
   });
   byId("modal")?.addEventListener("click", function (event) { if (event.target === this) closeModal(); });
   byId("accountModal")?.addEventListener("click", function (event) { if (event.target === this) closeAccountModal(); });
@@ -3299,8 +3466,20 @@ function attachPageEvents() {
   byId("jobWhen")?.addEventListener("change", updateJobDateRangeVisibility);
   byId("jobCategory")?.addEventListener("change", updateJobCategoryTip);
   byId("jobImages")?.addEventListener("change", handleJobImages);
-  ["jobTitle", "description", "jobLocation", "jobBudget", "jobDateStart", "jobDateEnd"].forEach((id) => {
+  ["jobTitle", "description", "jobPostalCode", "jobLocation", "jobBudget", "jobDateStart", "jobDateEnd"].forEach((id) => {
     byId(id)?.addEventListener("input", analyzeJobQuality);
+  });
+  byId("resolvePostalCodeBtn")?.addEventListener("click", () => resolveJobPostalCode());
+  byId("jobPostalCode")?.addEventListener("input", (event) => {
+    const postalCode = normalizeSwedishPostalCode(event.target.value);
+    if (postalCode !== lastResolvedPostalCode) {
+      jobResolvedCoordinates = null;
+      byId("jobLocationMapWrap")?.classList.add("hidden");
+      setJobLocationStatus("Skriv klart postnumret och tryck på Hämta område.");
+    }
+  });
+  byId("jobPostalCode")?.addEventListener("blur", () => {
+    if (normalizeSwedishPostalCode(byId("jobPostalCode")?.value || "").length === 6) resolveJobPostalCode({ silent: true });
   });
   byId("jobDateStart")?.addEventListener("change", () => {
     if (byId("jobDateEnd")) byId("jobDateEnd").min = byId("jobDateStart")?.value || "";

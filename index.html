@@ -485,21 +485,42 @@
         <div class="field"><label for="jobDateStart">Tidigast</label><input id="jobDateStart" type="date" /></div>
         <div class="field"><label for="jobDateEnd">Senast <span class="optional-label">Frivilligt</span></label><input id="jobDateEnd" type="date" /></div>
       </div>
-      <div class="field">
-        <label for="jobPriceType">Pristyp</label>
-        <select id="jobPriceType" required>
-          <option value="fixed">Fast pris</option>
-          <option value="hourly">Timpris</option>
-          <option value="quote">Öppen för förslag</option>
-        </select>
+      <fieldset class="field full price-type-field">
+        <legend>Pristyp</legend>
+        <div class="price-type-options">
+          <label class="price-type-option">
+            <input type="radio" name="jobPriceType" value="fixed" checked />
+            <span><strong>Fast pris</strong><small>Ett totalpris för hela jobbet</small></span>
+          </label>
+          <label class="price-type-option">
+            <input type="radio" name="jobPriceType" value="hourly" />
+            <span><strong>Timpris</strong><small>Ersättning per arbetad timme</small></span>
+          </label>
+          <label class="price-type-option">
+            <input type="radio" name="jobPriceType" value="quote" />
+            <span><strong>Prisförslag</strong><small>Utföraren föreslår ett pris</small></span>
+          </label>
+        </div>
         <span class="field-help">Välj först hur ersättningen ska räknas.</span>
         <span class="field-help price-change-notice hidden" id="jobPriceChangeNotice" role="status"></span>
-      </div>
-      <div class="field">
+      </fieldset>
+      <div class="field" id="jobBudgetField">
         <label id="budgetLabel" for="jobBudget">Fast totalpris</label>
-        <input id="jobBudget" inputmode="numeric" placeholder="Exempel: 600 kr totalt" required />
+        <div class="currency-input-wrap">
+          <input id="jobBudget" inputmode="numeric" pattern="[0-9 ]*" placeholder="Exempel: 600" required />
+          <span id="jobBudgetSuffix">kr</span>
+        </div>
         <span class="field-help" id="jobBudgetHelp">Beloppet gäller för hela jobbet.</span>
       </div>
+      <fieldset class="field material-cost-field" id="jobMaterialField">
+        <legend>Material och andra kostnader</legend>
+        <div class="material-cost-options">
+          <label><input type="radio" name="jobMaterialCost" value="included" /><span>Material ingår</span></label>
+          <label><input type="radio" name="jobMaterialCost" value="extra" /><span>Material tillkommer</span></label>
+          <label><input type="radio" name="jobMaterialCost" value="none" /><span>Inget material behövs</span></label>
+        </div>
+        <span class="field-help">Välj det som stämmer bäst för det fasta priset.</span>
+      </fieldset>
       <div class="field">
         <label>Kategori</label>
         <select id="jobCategory" required>
@@ -524,6 +545,11 @@
         <div class="job-quality-head"><div><strong id="jobQualityLabel">Annonsens kvalitet: Kom igång</strong><span id="jobQualityPrivacy">Kontrolleras direkt i din webbläsare</span></div><strong id="jobQualityScore">0%</strong></div>
         <div class="job-quality-track"><span id="jobQualityBar"></span></div>
         <ul id="jobQualityTips"><li>Börja med en tydlig rubrik och beskrivning.</li></ul>
+      </div>
+      <div class="job-price-summary field full" id="jobPriceSummary" aria-live="polite">
+        <span>Kontrollera priset</span>
+        <strong id="jobPriceSummaryMain">Fast pris · ange ett totalpris</strong>
+        <small id="jobPriceSummaryMaterial">Välj hur materialkostnaden hanteras.</small>
       </div>
       <div class="field full">
         <button class="btn btn-primary" style="width:100%" type="submit" id="submitBtn">Publicera jobb</button>
@@ -784,6 +810,11 @@
               <input id="editProfileSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" />
             </div>
           </div>
+          <label class="email-notification-setting" for="emailTransactionalEnabled">
+            <input id="emailTransactionalEnabled" type="checkbox" checked />
+            <span><strong>E-postnotiser</strong><small>Mejla mig vid nya meddelanden och viktiga händelser i mina jobb.</small></span>
+          </label>
+          <div class="email-notification-actions"><button class="link-button" id="sendTestEmailBtn" type="button" onclick="sendTestNotificationEmail()">Skicka testmejl</button><span class="field-help">Testet skickas till adressen du loggar in med.</span></div>
           <button class="btn btn-primary" id="saveOptionalProfileBtn" type="button" onclick="saveOptionalProfile()">Spara profil</button>
           <div class="profile-progress"><span id="profileProgressBar"></span></div>
           <div class="account-meta" id="profileProgressText"></div>

@@ -26,8 +26,16 @@ function escapeHtml(value: unknown) {
 function priceLabel(job: Record<string, unknown>) {
   const amount = new Intl.NumberFormat("sv-SE").format(Number(job.budget_sek) || 0);
   if (job.price_type === "hourly") return `${amount} kr/tim`;
-  if (job.price_type === "quote") return `Budget cirka ${amount} kr`;
+  if (job.price_type === "quote") return job.budget_sek ? `Budget cirka ${amount} kr` : "Öppen för prisförslag";
   return `${amount} kr`;
+}
+
+function materialLabel(value: unknown) {
+  return ({
+    included: "Material ingår i priset",
+    extra: "Materialkostnad tillkommer",
+    none: "Inget material behövs",
+  } as Record<string, string>)[String(value ?? "")] ?? "";
 }
 
 function emailHtml(job: Record<string, unknown>) {
@@ -36,7 +44,8 @@ function emailHtml(job: Record<string, unknown>) {
   const location = escapeHtml(job.location);
   const timing = escapeHtml(job.timing);
   const price = escapeHtml(priceLabel(job));
-  return `<!doctype html><html lang="sv"><body style="margin:0;background:#f3f5f2;font-family:Arial,sans-serif;color:#183227"><div style="max-width:620px;margin:0 auto;padding:28px 16px"><div style="background:#fff;border:1px solid #dce5de;border-radius:18px;padding:28px"><div style="font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#2f6b4f">Nytt jobb som matchar din bevakning</div><h1 style="font-size:26px;line-height:1.2;margin:12px 0 10px">${title}</h1><p style="font-size:16px;line-height:1.55;color:#506158;margin:0 0 20px">${description}</p><div style="padding:16px;border-radius:14px;background:#eef5f0;line-height:1.65"><strong>${location}</strong><br>${timing} · ${price}</div><a href="${siteUrl}/jobb.html" style="display:inline-block;margin-top:22px;padding:13px 18px;border-radius:12px;background:#2f6b4f;color:#fff;text-decoration:none;font-weight:800">Visa jobbet</a></div><p style="font-size:12px;line-height:1.55;color:#718078;padding:0 8px">Du får mejlet eftersom du har en aktiv jobbbevakning. Bevakningen kan pausas eller tas bort under Mitt konto → Min profil.</p></div></body></html>`;
+  const material = escapeHtml(materialLabel(job.material_cost_type));
+  return `<!doctype html><html lang="sv"><body style="margin:0;background:#f3f5f2;font-family:Arial,sans-serif;color:#183227"><div style="max-width:620px;margin:0 auto;padding:28px 16px"><div style="background:#fff;border:1px solid #dce5de;border-radius:18px;padding:28px"><div style="font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#2f6b4f">Nytt jobb som matchar din bevakning</div><h1 style="font-size:26px;line-height:1.2;margin:12px 0 10px">${title}</h1><p style="font-size:16px;line-height:1.55;color:#506158;margin:0 0 20px">${description}</p><div style="padding:16px;border-radius:14px;background:#eef5f0;line-height:1.65"><strong>${location}</strong><br>${timing} · ${price}${material ? `<br>${material}` : ""}</div><a href="${siteUrl}/jobb.html" style="display:inline-block;margin-top:22px;padding:13px 18px;border-radius:12px;background:#2f6b4f;color:#fff;text-decoration:none;font-weight:800">Visa jobbet</a></div><p style="font-size:12px;line-height:1.55;color:#718078;padding:0 8px">Du får mejlet eftersom du har en aktiv jobbbevakning. Bevakningen kan pausas eller tas bort under Mitt konto → Min profil.</p></div></body></html>`;
 }
 
 function stockholmDateKey(offsetDays = 0) {
@@ -133,7 +142,7 @@ const authenticatedHandler = withSupabase({ auth: "user" }, async (req, ctx) => 
   const callerId = String(ctx.userClaims?.sub ?? ctx.userClaims?.id ?? "");
   if (!Number.isSafeInteger(jobId) || jobId < 1 || !callerId) return jsonResponse({ error: "Invalid request" }, 400);
 
-  const { data: job, error: jobError } = await ctx.supabaseAdmin.from("jobs").select("id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, budget_sek, price_type, category, status, created_at").eq("id", jobId).maybeSingle();
+  const { data: job, error: jobError } = await ctx.supabaseAdmin.from("jobs").select("id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, budget_sek, price_type, material_cost_type, category, status, created_at").eq("id", jobId).maybeSingle();
   if (jobError) return jsonResponse({ error: "Could not load job" }, 500);
   if (!job || job.user_id !== callerId) return jsonResponse({ error: "Forbidden" }, 403);
   const isFresh = Date.now() - new Date(job.created_at).getTime() <= 15 * 60 * 1000;

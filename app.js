@@ -68,7 +68,7 @@ let authResendTimer = null;
 let authAutoSubmitTimer = null;
 let authReady = false;
 
-const profileFields = "id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek, availability_status, available_until, email_job_alert_mode";
+const profileFields = "id, display_name, phone, account_type, performer_enabled, bio, service_area, skills, role, avatar_path, savings_goal_sek, availability_status, available_until, email_job_alert_mode, email_transactional_enabled";
 
 const byId = (id) => document.getElementById(id);
 const isAccountPage = () => document.body.dataset.page === "account";
@@ -807,6 +807,7 @@ async function sendAccountConversationMessage(event) {
     return;
   }
   input.value = "";
+  triggerEmailDelivery();
   await loadAccountConversationMessages();
   input.focus();
 }
@@ -903,6 +904,7 @@ function updateProfilePanel() {
   if (byId("editProfileBio")) byId("editProfileBio").value = currentProfile.bio || "";
   if (byId("editProfileArea")) byId("editProfileArea").value = currentProfile.service_area || "";
   if (byId("editProfileSkills")) byId("editProfileSkills").value = (currentProfile.skills || []).join(", ");
+  if (byId("emailTransactionalEnabled")) byId("emailTransactionalEnabled").checked = currentProfile.email_transactional_enabled !== false;
   byId("performerProfileFields")?.classList.toggle("hidden", !currentProfile.performer_enabled);
   updateAvailabilityCard();
 
@@ -1085,7 +1087,38 @@ function startNotificationRefresh() {
   notificationRefreshTimer = null;
   if (!currentUser) return;
   loadNotifications();
+  triggerEmailDelivery();
   notificationRefreshTimer = window.setInterval(loadNotifications, 30000);
+}
+
+function triggerEmailDelivery() {
+  if (!supabaseClient || !currentUser) return;
+  supabaseClient.functions.invoke("send-notification-emails", { body: {} }).catch(() => {});
+}
+
+async function sendTestNotificationEmail() {
+  if (!supabaseClient || !currentUser) {
+    setNotice("accountNotice", "Logga in för att skicka ett testmejl.", "error");
+    return;
+  }
+  setLoading("sendTestEmailBtn", true, "Skickar…", "Skicka testmejl");
+  setNotice("accountNotice");
+  const { data, error } = await supabaseClient.functions.invoke("send-notification-emails", {
+    body: { test: true }
+  });
+  setLoading("sendTestEmailBtn", false, "Skickar…", "Skicka testmejl");
+  if (error || !data?.sent) {
+    const notConfigured = error?.context?.status === 503 || data?.error === "Email provider is not configured";
+    setNotice(
+      "accountNotice",
+      notConfigured
+        ? "E-posttjänsten är inte konfigurerad ännu. Lägg in RESEND_API_KEY i Supabase och försök igen."
+        : "Testmejlet kunde inte skickas. Försök igen om en stund.",
+      "error"
+    );
+    return;
+  }
+  setNotice("accountNotice", `Testmejlet har skickats till ${data.email || "din inloggningsadress"}.`, "success");
 }
 
 function setAvailabilityLoading(isLoading) {
@@ -1145,7 +1178,12 @@ async function saveOptionalProfile() {
   try {
     const previousAvatarPath = currentProfile.avatar_path;
     const avatarPath = await uploadProfileAvatar(file);
-    const updates = { display_name: displayName, bio: bio || null, avatar_path: avatarPath };
+    const updates = {
+      display_name: displayName,
+      bio: bio || null,
+      avatar_path: avatarPath,
+      email_transactional_enabled: byId("emailTransactionalEnabled")?.checked !== false
+    };
     if (currentProfile.performer_enabled) {
       updates.service_area = serviceArea || null;
       updates.skills = skills;
@@ -1247,18 +1285,68 @@ function parseBudget(value) {
   return digits ? Number(digits) : null;
 }
 
+function getJobPriceType() {
+  return document.querySelector('input[name="jobPriceType"]:checked')?.value || "fixed";
+}
+
+function setJobPriceType(value) {
+  const input = document.querySelector(`input[name="jobPriceType"][value="${value}"]`)
+    || document.querySelector('input[name="jobPriceType"][value="fixed"]');
+  if (input) input.checked = true;
+}
+
+function getJobMaterialCostType() {
+  return document.querySelector('input[name="jobMaterialCost"]:checked')?.value || null;
+}
+
+function setJobMaterialCostType(value) {
+  document.querySelectorAll('input[name="jobMaterialCost"]').forEach((input) => {
+    input.checked = input.value === value;
+  });
+}
+
+function materialCostLabel(value) {
+  return ({
+    included: "Material ingår i priset",
+    extra: "Materialkostnad tillkommer",
+    none: "Inget material behövs"
+  })[value] || "Materialkostnad ej angiven";
+}
+
+function updateJobPriceSummary() {
+  const priceType = getJobPriceType();
+  const budget = parseBudget(byId("jobBudget")?.value || "");
+  const main = byId("jobPriceSummaryMain");
+  const material = byId("jobPriceSummaryMaterial");
+  if (main) {
+    if (priceType === "hourly") main.textContent = budget ? `Timpris · ${formatCurrency(budget)}/tim` : "Timpris · ange pris per timme";
+    else if (priceType === "quote") main.textContent = "Prisförslag · utföraren föreslår pris";
+    else main.textContent = budget ? `Fast pris · ${formatCurrency(budget)} totalt` : "Fast pris · ange ett totalpris";
+  }
+  if (material) {
+    material.textContent = priceType === "fixed"
+      ? materialCostLabel(getJobMaterialCostType())
+      : priceType === "quote"
+        ? "Inget belopp behöver anges innan jobbet publiceras."
+        : "Beloppet gäller per arbetad timme.";
+  }
+}
+
 function updateJobPriceTypeFields(options = {}) {
-  const priceType = byId("jobPriceType")?.value || "fixed";
+  const priceType = getJobPriceType();
   const label = byId("budgetLabel");
   const input = byId("jobBudget");
   const help = byId("jobBudgetHelp");
+  const suffix = byId("jobBudgetSuffix");
+  const budgetField = byId("jobBudgetField");
+  const materialField = byId("jobMaterialField");
   const changeNotice = byId("jobPriceChangeNotice");
   if (!label || !input || !help) return;
   if (options.userInitiated && input.value.trim()) {
     input.value = "";
     if (changeNotice) {
-      changeNotice.textContent = "Beloppet rensades eftersom du ändrade pristyp. Fyll i ett nytt belopp.";
-      changeNotice.classList.remove("hidden");
+      changeNotice.textContent = priceType === "quote" ? "" : "Beloppet rensades eftersom du ändrade pristyp. Fyll i ett nytt belopp.";
+      changeNotice.classList.toggle("hidden", priceType === "quote");
     }
   } else if (changeNotice) {
     changeNotice.classList.add("hidden");
@@ -1266,17 +1354,29 @@ function updateJobPriceTypeFields(options = {}) {
   }
   if (priceType === "hourly") {
     label.textContent = "Timpris";
-    input.placeholder = "Exempel: 250 kr/tim";
+    input.placeholder = "Exempel: 250";
+    if (suffix) suffix.textContent = "kr/tim";
     help.textContent = "Beloppet gäller per arbetad timme, inte för hela jobbet.";
+    budgetField?.classList.remove("hidden");
+    materialField?.classList.add("hidden");
+    input.required = true;
+    setJobMaterialCostType(null);
   } else if (priceType === "quote") {
-    label.textContent = "Ungefärlig budget";
-    input.placeholder = "Exempel: 2 000 kr";
-    help.textContent = "Utförare kan föreslå ett annat pris.";
+    budgetField?.classList.add("hidden");
+    materialField?.classList.add("hidden");
+    input.required = false;
+    input.value = "";
+    setJobMaterialCostType(null);
   } else {
     label.textContent = "Fast totalpris";
-    input.placeholder = "Exempel: 600 kr totalt";
+    input.placeholder = "Exempel: 600";
+    if (suffix) suffix.textContent = "kr";
     help.textContent = "Beloppet gäller för hela jobbet.";
+    budgetField?.classList.remove("hidden");
+    materialField?.classList.remove("hidden");
+    input.required = true;
   }
+  updateJobPriceSummary();
   if (options.userInitiated) analyzeJobQuality();
 }
 
@@ -1328,6 +1428,9 @@ function analyzeJobQuality() {
   const postalCode = normalizeSwedishPostalCode(byId("jobPostalCode")?.value || "");
   const location = byId("jobLocation")?.value.trim() || "";
   const budget = parseBudget(byId("jobBudget")?.value || "");
+  const priceType = getJobPriceType();
+  const priceReady = priceType === "quote" || Boolean(budget);
+  const materialReady = priceType !== "fixed" || Boolean(getJobMaterialCostType());
   const timing = timingPayload();
   const validDateRange = timing.choice !== "custom" || (Boolean(timing.dateStart) && (!timing.dateEnd || timing.dateEnd >= timing.dateStart));
   const detailSignal = /\d|meter|rum|våning|hiss|redskap|verktyg|material|modell|yta|storlek|antal/i.test(description);
@@ -1338,7 +1441,8 @@ function analyzeJobQuality() {
     { ok: postalCode.length === 6, weight: 8, tip: "Ange ett femsiffrigt postnummer." },
     { ok: location.length >= 2, weight: 7, tip: "Kontrollera att ort eller område är ifyllt." },
     { ok: validDateRange, weight: 10, tip: "Kontrollera att datumintervallet börjar och slutar i rätt ordning." },
-    { ok: Boolean(budget), weight: 10, tip: "Ange budget eller ungefärlig ersättning." },
+    { ok: priceReady, weight: 7, tip: "Ange priset som ska visas i annonsen." },
+    { ok: materialReady, weight: 3, tip: "Välj hur materialkostnaden hanteras." },
     { ok: existingJobImagePaths.length + selectedJobImageFiles.length > 0, weight: 5, tip: "En bild är frivillig men gör jobbet lättare att bedöma." }
   ];
   const score = checks.reduce((sum, check) => sum + (check.ok ? check.weight : 0), 0);
@@ -1349,6 +1453,7 @@ function analyzeJobQuality() {
   if (byId("jobQualityBar")) byId("jobQualityBar").style.width = `${score}%`;
   if (byId("jobQualityTips")) byId("jobQualityTips").innerHTML = (missing.length ? missing.slice(0, 3) : ["Bra jobbat – annonsen innehåller det viktigaste."])
     .map((tip) => `<li>${escapeHtml(tip)}</li>`).join("");
+  updateJobPriceSummary();
   return { score, descriptionReady: description.length >= 80, dateReady: validDateRange };
 }
 
@@ -1445,7 +1550,7 @@ async function openEditJob(jobId) {
   if (!job) {
     const { data, error } = await supabaseClient
       .from("jobs")
-      .select("id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, image_paths, budget_sek, price_type, category, status")
+      .select("id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, image_paths, budget_sek, price_type, material_cost_type, category, status")
       .eq("id", jobId)
       .eq("user_id", currentUser.id)
       .maybeSingle();
@@ -1472,7 +1577,8 @@ async function openEditJob(jobId) {
   if (byId("jobDateStart")) byId("jobDateStart").value = job.date_start || "";
   if (byId("jobDateEnd")) byId("jobDateEnd").value = job.date_end || "";
   if (byId("jobBudget")) byId("jobBudget").value = job.budget_sek || "";
-  if (byId("jobPriceType")) byId("jobPriceType").value = job.price_type || "fixed";
+  setJobPriceType(job.price_type || "fixed");
+  setJobMaterialCostType(job.material_cost_type || null);
   if (byId("jobCategory")) byId("jobCategory").value = job.category || "Övrigt";
   if (byId("modalTitle")) byId("modalTitle").textContent = "Redigera jobb";
   if (byId("submitBtn")) byId("submitBtn").textContent = "Spara ändringar";
@@ -1514,12 +1620,15 @@ async function submitJob(event) {
     timing: schedule.timing,
     date_start: schedule.dateStart,
     date_end: schedule.dateEnd,
-    budget_sek: parseBudget(byId("jobBudget").value),
-    price_type: byId("jobPriceType").value,
+    budget_sek: getJobPriceType() === "quote" ? null : parseBudget(byId("jobBudget").value),
+    price_type: getJobPriceType(),
+    material_cost_type: getJobPriceType() === "fixed" ? getJobMaterialCostType() : null,
     category: byId("jobCategory").value
   };
-  if (payload.title.length < 4 || !quality.descriptionReady || !quality.dateReady || postalCode.length !== 6 || !area || !payload.budget_sek) {
-    setNotice("jobNotice", "Kontrollera rubrik, en noggrann beskrivning, postnummer, område, datum och budget.", "error");
+  const priceReady = payload.price_type === "quote" || Boolean(payload.budget_sek);
+  const materialReady = payload.price_type !== "fixed" || Boolean(payload.material_cost_type);
+  if (payload.title.length < 4 || !quality.descriptionReady || !quality.dateReady || postalCode.length !== 6 || !area || !priceReady || !materialReady) {
+    setNotice("jobNotice", "Kontrollera rubrik, beskrivning, plats, datum, pris och hur materialkostnaden hanteras.", "error");
     return;
   }
   const isEditing = Boolean(editingJobId);
@@ -1546,6 +1655,7 @@ async function submitJob(event) {
         p_timing: payload.timing,
         p_budget_sek: payload.budget_sek,
         p_price_type: payload.price_type,
+        p_material_cost_type: payload.material_cost_type,
         p_category: payload.category,
         p_date_start: payload.date_start,
         p_date_end: payload.date_end,
@@ -1574,8 +1684,10 @@ async function submitJob(event) {
   }
   if (data?.id) {
     supabaseClient.functions.invoke("send-new-job-alerts", { body: { job_id: data.id } }).catch(() => {});
+    triggerEmailDelivery();
   }
   byId("jobForm").reset();
+  updateJobPriceTypeFields();
   setNotice("jobNotice", "Jobbet är publicerat! Du skickas till jobblistan.", "success");
   setTimeout(() => { window.location.href = "jobb.html"; }, 900);
 }
@@ -1584,7 +1696,7 @@ async function loadMyJobs() {
   const container = byId("myJobs");
   if (!container || !supabaseClient || !currentUser) return;
   container.innerHTML = '<div class="account-meta">Hämtar dina jobb och uppdrag…</div>';
-  const jobFields = "id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, image_paths, budget_sek, price_type, category, status, created_at, updated_at, performer_id, agreed_price_sek, accepted_at, started_at, completed_at, cancelled_at, cancelled_by, cancellation_reason";
+  const jobFields = "id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, image_paths, budget_sek, price_type, material_cost_type, category, status, created_at, updated_at, performer_id, agreed_price_sek, accepted_at, started_at, completed_at, cancelled_at, cancelled_by, cancellation_reason";
   const [ownedResult, assignedResult, availabilityResult] = await Promise.all([
     supabaseClient
       .from("jobs")
@@ -1693,6 +1805,7 @@ function renderAccountJob(job, relationship) {
       </div>
       ${renderJobImages(job.image_paths)}
       <p>${escapeHtml(job.description)}</p>
+      ${job.material_cost_type ? `<div class="job-material-note">${escapeHtml(materialCostLabel(job.material_cost_type))}</div>` : ""}
       ${renderJobProgress(job.status)}
       ${["accepted", "in_progress", "completed"].includes(job.status) ? `<div class="job-agreement"><div><span>Överenskommen ersättning</span><strong>${job.agreed_price_sek ? `${formatCurrency(job.agreed_price_sek)}${job.price_type === "hourly" ? "/tim" : ""}` : formatPrice(job)}</strong></div><div><span>När</span><strong>${escapeHtml(job.timing)}</strong></div><div><span>Plats</span><strong>${escapeHtml(job.location)}</strong></div></div>` : ""}
       ${statusHelp ? `<div class="job-status-help">${escapeHtml(statusHelp)}</div>` : ""}
@@ -1810,6 +1923,7 @@ async function acceptApplication(applicationId, jobId) {
     setNotice("accountNotice", "Utföraren kunde inte väljas. Försök igen.", "error");
     return;
   }
+  triggerEmailDelivery();
   setNotice("accountNotice", "Utföraren är vald. Jobbet är accepterat och chatten är nu öppen.", "success");
   await loadMyJobs();
 }
@@ -1823,6 +1937,7 @@ async function startJob(jobId) {
     setNotice("accountNotice", "Jobbet kunde inte startas. Försök igen.", "error");
     return;
   }
+  triggerEmailDelivery();
   setNotice("accountNotice", "Jobbet är nu markerat som pågående.", "success");
   await loadMyJobs();
 }
@@ -1836,6 +1951,7 @@ async function markJobCompleted(jobId) {
     setNotice("accountNotice", "Jobbet kunde inte markeras som klart.", "error");
     return;
   }
+  triggerEmailDelivery();
   setNotice("accountNotice", "Jobbet är markerat som klart. Nu kan du lämna ett betyg.", "success");
   await loadMyJobs();
 }
@@ -1856,6 +1972,7 @@ async function cancelJob(jobId) {
     setNotice("accountNotice", "Jobbet kunde inte avbrytas. Försök igen.", "error");
     return;
   }
+  triggerEmailDelivery();
   closeJobChat();
   setNotice("accountNotice", "Jobbet har avbrutits och anledningen har sparats.", "success");
   await loadMyJobs();
@@ -2078,6 +2195,7 @@ async function sendDirectMessage(event) {
     return;
   }
   input.value = "";
+  triggerEmailDelivery();
   await loadDirectMessages();
   input.focus();
 }
@@ -2122,6 +2240,7 @@ async function sendJobMessage(event) {
     return;
   }
   input.value = "";
+  triggerEmailDelivery();
   await loadJobMessages();
   input.focus();
 }
@@ -2427,7 +2546,7 @@ async function loadPublicJobs() {
   }
   const { data, error } = await supabaseClient
     .from("jobs")
-    .select("id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, image_paths, budget_sek, price_type, category, status, created_at")
+    .select("id, user_id, title, description, location, latitude, longitude, timing, date_start, date_end, image_paths, budget_sek, price_type, material_cost_type, category, status, created_at")
     .eq("status", "open")
     .order("created_at", { ascending: false });
   if (error) {
@@ -2816,9 +2935,10 @@ function renderPublicJobCard(job) {
       </div>
       ${renderJobImages(job.image_paths)}
       <p>${escapeHtml(job.description)}</p>
+      ${job.material_cost_type ? `<div class="job-material-note">${escapeHtml(materialCostLabel(job.material_cost_type))}</div>` : ""}
       <div class="feed-card-footer">
         <div><span class="account-meta">${job.price_type === "hourly" ? "Ersättning per timme" : job.price_type === "quote" ? "Beställaren är öppen för prisförslag" : "Fast ersättning"}</span><br><button class="link-button danger-link report-link" type="button" onclick="openSafetyReport('job', ${job.id})">Anmäl annonsen</button></div>
-        <button class="btn ${isOwnJob ? "btn-light" : "btn-primary"} btn-small" ${isOwnJob ? "disabled" : ""} onclick="beginApplication(${job.id})">${isOwnJob ? "Ditt jobb" : "Ta jobbet"}</button>
+        <button class="btn ${isOwnJob ? "btn-light" : "btn-primary"} btn-small" ${isOwnJob ? "disabled" : ""} onclick="beginApplication(${job.id})">${isOwnJob ? "Ditt jobb" : job.price_type === "quote" ? "Lämna prisförslag" : "Ta jobbet"}</button>
       </div>
     </article>`;
 }
@@ -3207,15 +3327,22 @@ function beginApplication(jobId) {
 function openApplicationModal(jobId) {
   const job = publicJobs.find((item) => Number(item.id) === Number(jobId));
   if (!job) return;
+  const isQuote = job.price_type === "quote";
   selectedApplicationJobId = jobId;
   byId("applicationForm")?.reset();
   if (byId("applicationJobTitle")) byId("applicationJobTitle").textContent = job.title || job.category;
   if (byId("applicationAcceptLabel")) byId("applicationAcceptLabel").textContent = `Ta jobbet · ${formatPrice(job)}`;
+  byId("applicationOfferAccept")?.closest(".application-offer-option")?.classList.toggle("hidden", isQuote);
+  if (byId("applicationOfferAccept")) byId("applicationOfferAccept").disabled = isQuote;
+  if (byId("applicationOfferCounter")) byId("applicationOfferCounter").checked = isQuote;
+  if (byId("applicationCounterLabel")) byId("applicationCounterLabel").textContent = isQuote ? "Lämna prisförslag" : "Lämna motbud";
   if (byId("applicationPriceLabel")) byId("applicationPriceLabel").textContent = job.price_type === "hourly" ? "Ditt motbud per timme" : "Ditt motbud";
-  if (byId("applicationPrice")) byId("applicationPrice").placeholder = job.price_type === "hourly" ? "Exempel: 250 kr/tim" : "Exempel: 700 kr";
+  if (byId("applicationPriceLabel") && isQuote) byId("applicationPriceLabel").textContent = "Ditt prisförslag";
+  if (byId("applicationPrice")) byId("applicationPrice").placeholder = job.price_type === "hourly" ? "Exempel: 250" : "Exempel: 700";
+  if (byId("applicationPriceSuffix")) byId("applicationPriceSuffix").textContent = job.price_type === "hourly" ? "kr/tim" : "kr";
   if (byId("applicationPriceHelp")) byId("applicationPriceHelp").textContent = job.price_type === "hourly"
     ? "Motbudet gäller per arbetad timme."
-    : "Beställaren kan välja att acceptera ditt prisförslag.";
+    : isQuote ? "Beställaren kan välja att acceptera ditt prisförslag." : "Beställaren kan välja att acceptera ditt motbud.";
   updateApplicationOfferChoice();
   setNotice("applicationNotice");
   byId("applicationModal")?.classList.add("show");
@@ -3223,6 +3350,8 @@ function openApplicationModal(jobId) {
 }
 
 function updateApplicationOfferChoice() {
+  const job = publicJobs.find((item) => Number(item.id) === Number(selectedApplicationJobId));
+  const isQuote = job?.price_type === "quote";
   const isCounterOffer = document.querySelector('input[name="applicationOfferType"]:checked')?.value === "counter";
   byId("applicationCounterofferField")?.classList.toggle("hidden", !isCounterOffer);
   if (byId("applicationPrice")) {
@@ -3240,9 +3369,9 @@ function updateApplicationOfferChoice() {
     ? "Meddelande till beställaren"
     : 'Meddelande till beställaren <span class="optional-label">Frivilligt</span>';
   if (byId("applicationMessageHelp")) byId("applicationMessageHelp").textContent = isCounterOffer
-    ? "Beskriv varför du föreslår ett annat pris."
+    ? isQuote ? "Skriv gärna när du kan utföra jobbet och vad priset bygger på." : "Beskriv varför du föreslår ett annat pris."
     : "Du kan ta jobbet direkt utan att skriva ett meddelande.";
-  if (byId("applicationSubmitBtn")) byId("applicationSubmitBtn").textContent = isCounterOffer ? "Skicka motbud" : "Ta jobbet";
+  if (byId("applicationSubmitBtn")) byId("applicationSubmitBtn").textContent = isCounterOffer ? isQuote ? "Skicka prisförslag" : "Skicka motbud" : "Ta jobbet";
 }
 
 function closeApplicationModal() {
@@ -3256,7 +3385,8 @@ async function submitApplication(event) {
   const job = publicJobs.find((item) => Number(item.id) === Number(selectedApplicationJobId));
   if (!job) return;
   const message = byId("applicationMessage").value.trim();
-  const isCounterOffer = document.querySelector('input[name="applicationOfferType"]:checked')?.value === "counter";
+  const isQuote = job.price_type === "quote";
+  const isCounterOffer = isQuote || document.querySelector('input[name="applicationOfferType"]:checked')?.value === "counter";
   const proposedPrice = isCounterOffer ? parseBudget(byId("applicationPrice").value) : Number(job.budget_sek);
   if (message && message.length < 10) {
     setNotice("applicationNotice", "Skriv minst tio tecken i meddelandet eller lämna det tomt.", "error");
@@ -3270,12 +3400,12 @@ async function submitApplication(event) {
     setNotice("applicationNotice", "Ange ett giltigt motbud.", "error");
     return;
   }
-  if (isCounterOffer && proposedPrice === Number(job.budget_sek)) {
+  if (isCounterOffer && job.budget_sek && proposedPrice === Number(job.budget_sek)) {
     setNotice("applicationNotice", "Motbudet är samma som annonspriset. Välj Ta jobbet istället.", "error");
     return;
   }
-  const defaultButtonText = isCounterOffer ? "Skicka motbud" : "Ta jobbet";
-  setLoading("applicationSubmitBtn", true, isCounterOffer ? "Skickar motbud…" : "Tar jobbet…", defaultButtonText);
+  const defaultButtonText = isCounterOffer ? isQuote ? "Skicka prisförslag" : "Skicka motbud" : "Ta jobbet";
+  setLoading("applicationSubmitBtn", true, isCounterOffer ? "Skickar pris…" : "Tar jobbet…", defaultButtonText);
   const { error } = isCounterOffer
     ? await supabaseClient.from("job_applications").insert({
       job_id: selectedApplicationJobId,
@@ -3287,7 +3417,7 @@ async function submitApplication(event) {
       p_job_id: selectedApplicationJobId,
       p_message: message
     });
-  setLoading("applicationSubmitBtn", false, isCounterOffer ? "Skickar motbud…" : "Tar jobbet…", defaultButtonText);
+  setLoading("applicationSubmitBtn", false, isCounterOffer ? "Skickar pris…" : "Tar jobbet…", defaultButtonText);
   if (error) {
     const duplicate = error.code === "23505";
     const unavailable = !isCounterOffer && /JOB_UNAVAILABLE/i.test(error.message || "");
@@ -3296,9 +3426,10 @@ async function submitApplication(event) {
       setNotice("applicationNotice", "Någon annan hann ta jobbet, eller så är det inte längre öppet.", "error");
       return;
     }
-    setNotice("applicationNotice", duplicate ? "Du har redan lämnat ett motbud på det här jobbet." : isCounterOffer ? "Motbudet kunde inte skickas." : "Jobbet kunde inte tas. Försök igen.", "error");
+    setNotice("applicationNotice", duplicate ? "Du har redan lämnat ett prisförslag på det här jobbet." : isCounterOffer ? "Prisförslaget kunde inte skickas." : "Jobbet kunde inte tas. Försök igen.", "error");
     return;
   }
+  triggerEmailDelivery();
   if (!isCounterOffer) {
     publicJobs = publicJobs.filter((item) => Number(item.id) !== Number(selectedApplicationJobId));
     applyJobFilters();
@@ -3314,7 +3445,7 @@ async function submitApplication(event) {
   }
   byId("applicationForm").reset();
   updateApplicationOfferChoice();
-  setNotice("applicationNotice", "Ditt motbud är skickat. Jobbet är öppet tills beställaren accepterar.", "success");
+  setNotice("applicationNotice", isQuote ? "Ditt prisförslag är skickat. Jobbet är öppet tills beställaren accepterar." : "Ditt motbud är skickat. Jobbet är öppet tills beställaren accepterar.", "success");
   await loadNotifications();
   window.setTimeout(closeApplicationModal, 1400);
 }
@@ -3322,7 +3453,7 @@ async function submitApplication(event) {
 function formatPrice(job) {
   const amount = Number(job.budget_sek || 0).toLocaleString("sv-SE");
   if (job.price_type === "hourly") return `${amount} kr/tim`;
-  if (job.price_type === "quote") return `Ca ${amount} kr`;
+  if (job.price_type === "quote") return job.budget_sek ? `Ca ${amount} kr` : "Prisförslag";
   return `${amount} kr`;
 }
 
@@ -3474,7 +3605,12 @@ function attachPageEvents() {
   window.addEventListener("pageshow", () => {
     if (authReady && !currentUser) restorePendingLogin();
   });
-  byId("jobPriceType")?.addEventListener("change", () => updateJobPriceTypeFields({ userInitiated: true }));
+  document.querySelectorAll('input[name="jobPriceType"]').forEach((input) => {
+    input.addEventListener("change", () => updateJobPriceTypeFields({ userInitiated: true }));
+  });
+  document.querySelectorAll('input[name="jobMaterialCost"]').forEach((input) => {
+    input.addEventListener("change", analyzeJobQuality);
+  });
   byId("jobWhen")?.addEventListener("change", updateJobDateRangeVisibility);
   byId("jobCategory")?.addEventListener("change", updateJobCategoryTip);
   byId("jobImages")?.addEventListener("change", handleJobImages);

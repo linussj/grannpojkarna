@@ -161,6 +161,11 @@
               <div class="field"><label for="editProfileArea">Område</label><input id="editProfileArea" maxlength="120" placeholder="Exempel: Upplands Väsby med omnejd" /></div>
               <div class="field"><label for="editProfileSkills">Vad kan du hjälpa till med?</label><input id="editProfileSkills" maxlength="300" placeholder="Exempel: flytt, trädgård, montering" /></div>
             </div>
+            <label class="email-notification-setting" for="emailTransactionalEnabled">
+              <input id="emailTransactionalEnabled" type="checkbox" checked />
+              <span><strong>E-postnotiser</strong><small>Mejla mig vid nya meddelanden och viktiga händelser i mina jobb.</small></span>
+            </label>
+            <div class="email-notification-actions"><button class="link-button" id="sendTestEmailBtn" type="button" onclick="sendTestNotificationEmail()">Skicka testmejl</button><span class="field-help">Testet skickas till adressen du loggar in med.</span></div>
             <div class="profile-save-row"><button class="btn btn-primary" id="saveOptionalProfileBtn" type="button" onclick="saveOptionalProfile()">Spara profil</button><div><div class="profile-progress"><span id="profileProgressBar"></span></div><div class="account-meta" id="profileProgressText"></div></div></div>
           </div>
           <section class="account-settings-card" aria-labelledby="jobAlertsHeading"><div><h3 id="jobAlertsHeading">Jobbbevakningar</h3><p>Bevakningar du sparar på jobbsidan visas här.</p></div><div id="jobAlertsList"><span class="account-meta">Inga bevakningar ännu.</span></div><a class="btn btn-light btn-small" href="jobb.html#lediga-jobb">Skapa bevakning</a></section>

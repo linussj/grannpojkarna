@@ -220,7 +220,7 @@
         </label>
         <label class="application-offer-option" for="applicationOfferCounter">
           <input id="applicationOfferCounter" type="radio" name="applicationOfferType" value="counter" />
-          <span><strong>Lämna motbud</strong><small>Jobbet förblir öppet tills beställaren accepterar ditt pris.</small></span>
+          <span><strong id="applicationCounterLabel">Lämna motbud</strong><small>Jobbet förblir öppet tills beställaren accepterar ditt pris.</small></span>
         </label>
       </fieldset>
       <div class="field full">
@@ -230,7 +230,10 @@
       </div>
       <div class="field full hidden" id="applicationCounterofferField">
         <label for="applicationPrice" id="applicationPriceLabel">Ditt motbud</label>
-        <input id="applicationPrice" inputmode="numeric" placeholder="Exempel: 700 kr" />
+        <div class="currency-input-wrap">
+          <input id="applicationPrice" inputmode="numeric" pattern="[0-9 ]*" placeholder="Exempel: 700" />
+          <span id="applicationPriceSuffix">kr</span>
+        </div>
         <span class="field-help" id="applicationPriceHelp">Beställaren kan välja att acceptera ditt prisförslag.</span>
       </div>
       <div class="field full">

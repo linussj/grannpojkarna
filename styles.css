@@ -179,6 +179,34 @@ footer{padding:44px 0 60px;color:var(--muted)}
 .field.full{grid-column:1/-1}
 .field-help{font-size:.78rem;color:var(--muted);line-height:1.4}
 .price-change-notice{color:#8a5a00;font-weight:750}
+.price-type-field,.material-cost-field{margin:0;padding:0;border:0}
+.price-type-field legend,.material-cost-field legend{margin-bottom:7px;font-weight:800;font-size:.92rem}
+.price-type-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.price-type-option{position:relative;min-width:0;cursor:pointer}
+.price-type-option input{position:absolute;opacity:0;pointer-events:none}
+.price-type-option>span{min-height:86px;display:grid;align-content:center;gap:4px;padding:13px 14px;border:1px solid var(--line);border-radius:15px;background:white;transition:border-color .18s ease,background .18s ease,box-shadow .18s ease}
+.price-type-option strong{font-size:.92rem}.price-type-option small{color:var(--muted);font-size:.72rem;line-height:1.35}
+.price-type-option input:checked+span{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 0 0 2px rgba(47,107,79,.1)}
+.price-type-option input:checked+span strong{color:var(--brand-dark)}
+.price-type-option input:focus-visible+span{outline:3px solid rgba(47,107,79,.24);outline-offset:2px}
+.currency-input-wrap{position:relative}
+.currency-input-wrap input{height:54px;min-height:54px;padding-right:72px}
+.currency-input-wrap>span{position:absolute;right:14px;top:50%;transform:translateY(-50%);padding-left:12px;border-left:1px solid var(--line);color:var(--brand-dark);font-size:.84rem;font-weight:850;pointer-events:none}
+.material-cost-options{display:grid;gap:7px}
+.material-cost-options label{position:relative;cursor:pointer}
+.material-cost-options input{position:absolute;opacity:0;pointer-events:none}
+.material-cost-options span{min-height:42px;display:flex;align-items:center;padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:white;font-size:.8rem;font-weight:800;transition:border-color .18s ease,background .18s ease}
+.material-cost-options input:checked+span{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-dark)}
+.material-cost-options input:focus-visible+span{outline:3px solid rgba(47,107,79,.24);outline-offset:2px}
+.job-price-summary{padding:16px 18px;border:1px solid #bfd8c8;border-radius:17px;background:#f1f8f3}
+.job-price-summary>span{color:var(--muted);font-size:.72rem;font-weight:850;text-transform:uppercase;letter-spacing:.05em}
+.job-price-summary strong{font-size:1.04rem;color:var(--brand-dark)}
+.job-price-summary small{color:var(--muted);line-height:1.4}
+.job-material-note{display:inline-flex;margin-top:2px;padding:6px 9px;border-radius:10px;background:#f1f5f2;color:var(--brand-dark);font-size:.76rem;font-weight:800}
+.email-notification-setting{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:start;padding:14px;border:1px solid var(--line);border-radius:15px;background:#f8faf8;cursor:pointer}
+.email-notification-setting input{width:20px;height:20px;margin-top:2px;accent-color:var(--brand)}
+.email-notification-setting span{display:grid;gap:3px}.email-notification-setting strong{font-size:.9rem}.email-notification-setting small{color:var(--muted);font-size:.78rem;line-height:1.4}
+.email-notification-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:-1px}
 .date-range-fields{grid-template-columns:1fr 1fr;gap:14px;padding:14px;border:1px solid var(--line);border-radius:16px;background:#f8faf8}
 .job-tips-card,.onboarding-tips{border:1px solid #cfe0d5;border-radius:16px;background:#f4faf6;padding:14px 16px;color:var(--ink)}
 .job-tips-card summary,.onboarding-tips summary{cursor:pointer;font-weight:900;color:var(--brand-dark)}
@@ -578,6 +606,8 @@ input:focus,textarea:focus,select:focus{border-color:#86ab95;box-shadow:0 0 0 3p
   h1{font-size:3.4rem}
   section{padding:60px 0}
   .form-grid,.choice-grid,.date-range-fields{grid-template-columns:1fr}
+  .price-type-options{grid-template-columns:1fr}
+  .price-type-option>span{min-height:68px}
   .field.full{grid-column:auto}
   .job-location-card{padding:14px}
   .job-location-fields,.job-location-map-wrap{grid-template-columns:1fr}
